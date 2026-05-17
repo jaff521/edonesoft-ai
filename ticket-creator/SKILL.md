@@ -36,7 +36,8 @@ metadata: {
     "type": { "enum": ["feature", "consult", "complain"], "description": "工单类型" },
     "customer_name": { "type": "string", "description": "客户的姓名或昵称" },
     "company_name": { "type": "string", "description": "客户所在的公司名称" },
-    "note": { "type": "string", "description": "详细的问题描述或AI总结" }
+    "note": { "type": "string", "description": "详细的问题描述或AI总结" },
+    "materials": { "type": "array", "items": { "type": "string" }, "description": "JSON 格式的任务材料，包含公司全称、法人信息、变更事项、材料清单等。" }
   },
   "required": ["title", "type", "note"]
 }
