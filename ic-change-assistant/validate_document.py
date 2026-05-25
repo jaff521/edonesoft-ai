@@ -224,8 +224,10 @@ def validate_document(doctype, image_path, compare_name=None):
     if extracted.get("is_expired"):
         issues.append("证件已过期，请提供有效证件")
 
-    # 匹配名称
-    if compare_name and extracted.get("name"):
+    # 验证姓名是否识别成功
+    if not extracted.get("name"):
+        issues.append("无法识别证件姓名，请确保图片清晰完整")
+    elif compare_name and extracted.get("name"):
         if compare_name != extracted.get("name"):
             issues.append(f"提交的证件姓名【{extracted['name']}】与登记信息【{compare_name}】不符")
 
