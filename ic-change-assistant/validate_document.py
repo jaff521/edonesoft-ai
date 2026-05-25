@@ -9,16 +9,65 @@ import json
 import base64
 import os
 import re
+import tempfile
+from urllib.parse import urlparse
 import requests
+import os
 
-# 阿里云DashScope配置
-DASHSCOPE_API = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-API_KEY = "sk-502c218e860a4c93ad1c4b6550346331"
+DASHSCOPE_API = os.getenv("DASHSCOPE_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
+VISION_MODEL = os.getenv("DASHSCOPE_VISION_MODEL", "qwen-vl-max")
 
-def call_qwen_vision(image_path, prompt, model="qwen-vl-max"):
-    """调用阿里云通义千问视觉模型"""
+
+def is_remote_url(path_or_url):
+    parsed = urlparse(str(path_or_url))
+    return parsed.scheme in {"http", "https"}
+
+
+def guess_file_suffix(path_or_url, content_type=""):
+    parsed = urlparse(str(path_or_url))
+    filename = os.path.basename(parsed.path)
+    _, ext = os.path.splitext(filename)
+    if ext:
+        return ext
+
+    if "png" in content_type:
+        return ".png"
+    if "webp" in content_type:
+        return ".webp"
+    if "pdf" in content_type:
+        return ".pdf"
+    return ".jpg"
+
+
+def materialize_image_input(path_or_url):
+    if not is_remote_url(path_or_url):
+        return path_or_url, None
+
+    response = requests.get(path_or_url, stream=True, timeout=30)
+    response.raise_for_status()
+
+    suffix = guess_file_suffix(path_or_url, response.headers.get("Content-Type", "").lower())
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
-        with open(image_path, 'rb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                temp_file.write(chunk)
+    finally:
+        temp_file.close()
+
+    return temp_file.name, temp_file.name
+
+def call_qwen_vision(image_path, prompt, model=None):
+    """调用阿里云通义千问视觉模型"""
+    if not API_KEY:
+        return {"success": False, "error": "未配置 DashScope API Key，请检查 DASHSCOPE_API_KEY 环境变量"}
+
+    local_image_path = image_path
+    temp_path = None
+    try:
+        local_image_path, temp_path = materialize_image_input(image_path)
+        with open(local_image_path, 'rb') as f:
             image_data = f.read()
     except FileNotFoundError:
         return {"success": False, "error": "图片文件不存在"}
@@ -44,7 +93,7 @@ def call_qwen_vision(image_path, prompt, model="qwen-vl-max"):
     }]
 
     payload = {
-        "model": model,
+        "model": model or VISION_MODEL,
         "messages": messages,
         "max_tokens": 1024
     }
@@ -61,6 +110,9 @@ def call_qwen_vision(image_path, prompt, model="qwen-vl-max"):
             return {"success": False, "error": f"未知响应: {result}"}
     except Exception as e:
         return {"success": False, "error": f"API调用失败: {str(e)}"}
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 def parse_idcard_response(text):
     """解析身份证识别结果"""
@@ -195,7 +247,7 @@ def main():
     if len(sys.argv) < 3:
         print(json.dumps({
             "success": False,
-            "error": "用法: python3 validate_document.py <证件类型:idcard|business_license> <图片路径> [对比名称]"
+            "error": "用法: python3 validate_document.py <证件类型:idcard|business_license> <图片路径或URL> [对比名称]"
         }, ensure_ascii=False, indent=2))
         return
 

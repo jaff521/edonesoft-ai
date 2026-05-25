@@ -9,12 +9,12 @@ import json
 import time
 import requests
 import hashlib
-import re
+import os
 
-APP_ID = "k2dyD6x0ZnlZSY3I"
-SECRET = "1RJWEyLVn7fx3p36"
-FUZZY_QUERY_API = "https://gateway.qyxqk.com/wdyl/openapi/fuzzy_query/"
-SHAREHOLDER_API = "https://gateway.qyxqk.com/wdyl/openapi/company_stockholder_query/"
+APP_ID = os.getenv("QYXQK_APP_ID", "")
+SECRET = os.getenv("QYXQK_SECRET", "")
+FUZZY_QUERY_API = os.getenv("QYXQK_FUZZY_QUERY_API", "https://gateway.qyxqk.com/wdyl/openapi/fuzzy_query/")
+SHAREHOLDER_API = os.getenv("QYXQK_SHAREHOLDER_API", "https://gateway.qyxqk.com/wdyl/openapi/company_stockholder_query/")
 
 def generate_timestamp():
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -90,9 +90,23 @@ def format_capital(amount):
     except:
         return str(amount)
 
+
+def amount_to_yuan_from_wan(amount):
+    """将工商接口常见的'万'单位金额转成元整数。"""
+    if amount in (None, ""):
+        return None
+    try:
+        return int(float(amount) * 10000)
+    except:
+        return None
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"success": False, "error": "请输入企业全称"}, ensure_ascii=False, indent=2))
+        return
+
+    if not APP_ID or not SECRET:
+        print(json.dumps({"success": False, "error": "未配置企信查询凭证，请检查 QYXQK_APP_ID / QYXQK_SECRET 环境变量"}, ensure_ascii=False, indent=2))
         return
 
     company_name = sys.argv[1]
@@ -118,11 +132,27 @@ def main():
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
+    official_company_name = company_info.get("ENTNAME") or company_info.get("NAME") or company_name
+    legal_representative = company_info.get("FRNAME", "未知")
+    raw_registered_capital = company_info.get("regcap")
+    registered_capital = format_capital(raw_registered_capital)
+    registered_capital_yuan = amount_to_yuan_from_wan(raw_registered_capital)
+    registration_status = company_info.get("ENTSTATUS", "正常")
+    established_date = company_info.get("ESDATE", "")
+
+    result["company_name"] = official_company_name
+    result["companyName"] = official_company_name
     result["unified_credit_code"] = unified_credit_code
-    result["legal_representative"] = company_info.get("FRNAME", "未知")
-    result["registered_capital"] = format_capital(company_info.get("regcap"))
-    result["registration_status"] = company_info.get("ENTSTATUS", "正常")
-    result["established_date"] = company_info.get("ESDATE", "")
+    result["creditCode"] = unified_credit_code
+    result["legal_representative"] = legal_representative
+    result["legalRepresentative"] = legal_representative
+    result["registered_capital"] = registered_capital
+    result["registeredCapital"] = registered_capital
+    result["registeredCapitalYuan"] = registered_capital_yuan
+    result["registration_status"] = registration_status
+    result["registrationStatus"] = registration_status
+    result["established_date"] = established_date
+    result["establishedDate"] = established_date
 
     # Step 2: 查询股东信息
     shareholder_data = query_shareholders(unified_credit_code)
@@ -149,11 +179,26 @@ def main():
             shareholders.append({
                 "name": name,
                 "amount": f"{amount:.0f}万" if amount > 0 else "0",
+                "amountYuan": amount_to_yuan_from_wan(amount) if amount > 0 else 0,
                 "percentage": percentage,
+                "ratio": round((amount / float(regcap)), 4) if regcap and amount > 0 else 0,
                 "type": detect_shareholder_type(name)
             })
 
     result["shareholders"] = shareholders
+    result["standardChangeHints"] = {
+        "registeredCapitalYuan": registered_capital_yuan,
+        "equityBeforeChange": {
+            "shareholders": [
+                {
+                    "name": shareholder["name"],
+                    "amount": shareholder.get("amountYuan", 0),
+                    "ratio": shareholder.get("ratio", 0),
+                }
+                for shareholder in shareholders
+            ]
+        }
+    }
     result["success"] = True
 
     print(json.dumps(result, ensure_ascii=False, indent=2))

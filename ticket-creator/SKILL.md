@@ -13,6 +13,11 @@ metadata: {
 
 你作为专业的前置助手，负责将用户的自然语言业务诉求（如企业改名、换法人、股份变更、改经营范围等）转化为标准的系统工商变更聚合工单。
 
+## 配置要求
+- 必填环境变量：
+  - `TICKET_CREATOR_BASE_URL`
+  - `TICKET_CREATOR_OPEN_TOKEN`
+
 ## 调用指南
 
 ### 1. 触发时机
@@ -26,8 +31,11 @@ metadata: {
 
 ### 3. 字段处理规则
 * **格式对齐**：只需输出 `workOrder`、`itemList`、`agentList` 三个根节点，嵌套由脚本自动完成
+* **严格对照接口示例**：优先严格对照 `工商变更工单API.md` 第 8.1 节“新增工单”请求体生成参数；如果字段与自然语言描述冲突，以第 8.1 节示例和第 7 节 JSON 结构规范为准
+* **字典值优先**：优先传接口字典 `item_value`，如 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=PENDING`、`itemName=EQUITY`；常见中文别名脚本会自动归一化
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
 * **JSON 节点**：`beforeChange` 和 `afterChange` 必须是明确的 K-V 对象
+* **默认值**：未提供时默认 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=PENDING`
 * **可选字段**：如用户提供身份证照片URL、身份证号等，应一并传入
 
 ---
@@ -39,29 +47,69 @@ metadata: {
 ```json
 {
   "workOrder": {
-    "enterpriseName": "企业名称",
-    "creditCode": "统一社会信用代码",
-    "matterType": "事项类型",
-    "objectType": "对象类型（可选）",
-    "orderType": "工单类型（可选）",
-    "orderStatus": "工单状态（可选）"
+    "enterpriseName": "上海星辰贸易有限公司",
+    "creditCode": "91310000MA002B002X",
+    "matterType": "CHANGE",
+    "objectType": "ENTERPRISE",
+    "orderType": "BIZ_CHANGE",
+    "orderStatus": "PENDING"
   },
   "itemList": [
     {
-      "itemName": "变更事项名称",
-      "beforeChange": {"原字段": "原值"},
-      "afterChange": {"新字段": "新值"}
+      "itemName": "CAPITAL",
+      "beforeChange": {
+        "amount": 1000000,
+        "currency": "CNY",
+        "contributionType": "货币"
+      },
+      "afterChange": {
+        "amount": 5000000,
+        "currency": "CNY",
+        "contributionType": "货币"
+      }
+    },
+    {
+      "itemName": "SCOPE",
+      "beforeChange": {
+        "scope": "计算机软件开发；技术咨询。"
+      },
+      "afterChange": {
+        "scope": "计算机软件开发；技术咨询；信息系统集成服务；数据处理服务。"
+      }
+    },
+    {
+      "itemName": "EQUITY",
+      "beforeChange": {
+        "shareholders": [
+          { "name": "王五", "amount": 3000000, "ratio": 0.60 },
+          { "name": "赵六", "amount": 2000000, "ratio": 0.40 }
+        ]
+      },
+      "afterChange": {
+        "shareholders": [
+          { "name": "王五", "amount": 2550000, "ratio": 0.51 },
+          { "name": "赵六", "amount": 1500000, "ratio": 0.30 },
+          { "name": "孙七", "amount": 950000, "ratio": 0.19 }
+        ]
+      }
     }
   ],
   "agentList": [
     {
-      "agentName": "经办人姓名",
-      "agentPhone": "手机号",
-      "agentIdentityType": "身份类型（默认1）",
-      "agentType": "经办人类型（可选）",
-      "agentIdCard": "身份证号（可选）",
-      "idCardFrontUrl": "身份证正面URL（可选）",
-      "idCardBackUrl": "身份证反面URL（可选）"
+      "agentType": "REG_CONTACT",
+      "agentName": "张三",
+      "agentPhone": "13800138000",
+      "agentIdCard": "310101199001011234",
+      "agentIdentityType": "EMPLOYEE",
+      "idCardFrontUrl": "https://aiqifu.oss-cn-beijing.aliyuncs.com/openclaw/20260524/id-front.jpg",
+      "idCardBackUrl": "https://aiqifu.oss-cn-beijing.aliyuncs.com/openclaw/20260524/id-back.jpg"
+    },
+    {
+      "agentType": "LEGAL_REP",
+      "agentName": "李四",
+      "agentPhone": "13900139000",
+      "agentIdCard": "310101198501012345",
+      "agentIdentityType": "LEGAL_REP"
     }
   ]
 }
@@ -74,7 +122,7 @@ metadata: {
 |------|------|------|
 | enterpriseName | ✅ | 企业名称/对象名称 |
 | creditCode | ✅ | 企业统一信用代码（18位） |
-| matterType | ✅ | 事项类型，如：法定代表人变更、注册资本变更、经营范围变更、住所变更、名称变更、股东股权变更等 |
+| matterType | ✅ | 事项类型代码，通常传 `CHANGE` |
 | objectType | ❌ | 对象类型，默认空 |
 | orderType | ❌ | 工单类型，默认空 |
 | orderStatus | ❌ | 工单状态，默认空 |
@@ -82,25 +130,33 @@ metadata: {
 #### itemList 变更登记事项列表（数组）
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| itemName | ✅ | 事项名称，如：住所、法定代表人、注册资本等 |
-| beforeChange | ✅ | 变更前信息，K-V对象 |
-| afterChange | ✅ | 变更后信息，K-V对象 |
+| itemName | ✅ | 事项名称代码，如：`ADDR`、`LEGAL`、`CAPITAL`、`SCOPE`、`NAME`、`EQUITY`、`PERIOD` |
+| beforeChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构，如 `CAPITAL.amount` 单位为元、`EQUITY.ratio` 为 0~1 小数 |
+| afterChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构 |
 
 #### agentList 经办人列表（数组）
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | agentName | ✅ | 经办人姓名 |
 | agentPhone | ✅ | 经办人手机号 |
-| agentIdentityType | ❌ | 经办人身份类型，默认"1" |
-| agentType | ❌ | 经办人类型 |
+| agentIdentityType | ❌ | 身份类型代码，如：`EMPLOYEE`、`LEGAL_REP` |
+| agentType | ❌ | 经办人类型代码，如：`REG_CONTACT`、`REG_AGENT`、`LEGAL_REP` |
 | agentIdCard | ❌ | 经办人身份证号码 |
 | idCardFrontUrl | ❌ | 身份证正面图片URL |
 | idCardBackUrl | ❌ | 身份证反面图片URL |
 
 ### 常见事项类型参考
-- 住所变更 → matterType: "住所变更"，itemName: "住所"
-- 法定代表人变更 → matterType: "法定代表人变更"，itemName: "法定代表人"
-- 注册资本变更 → matterType: "注册资本变更"，itemName: "注册资本"
-- 经营范围变更 → matterType: "经营范围变更"，itemName: "经营范围"
-- 企业名称变更 → matterType: "企业名称变更"，itemName: "企业名称"
-- 股东/股权变更 → matterType: "股东股权变更"，itemName: "股东"
+- 住所变更 → `matterType: "CHANGE"`，`itemName: "ADDR"`
+- 法定代表人变更 → `matterType: "CHANGE"`，`itemName: "LEGAL"`
+- 注册资本变更 → `matterType: "CHANGE"`，`itemName: "CAPITAL"`
+- 经营范围变更 → `matterType: "CHANGE"`，`itemName: "SCOPE"`
+- 企业名称变更 → `matterType: "CHANGE"`，`itemName: "NAME"`
+- 股东/股权变更 → `matterType: "CHANGE"`，`itemName: "EQUITY"`
+
+### 事项 JSON 结构要求
+- `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "contributionType": "货币"}`
+- `SCOPE`：`{"scope": "经营范围全文"}`
+- `ADDR`：`{"address": "完整经营地址"}`
+- `NAME` / `LEGAL`：`{"name": "名称或姓名"}`
+- `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
+- `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51}]}`
