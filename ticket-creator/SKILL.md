@@ -1,6 +1,6 @@
 ---
 name: ticket-creator
-description: 用于在工商变更系统中自动化创建/新增聚合工单（包含工单主信息、变更登记事项明细列表、经办人列表）。
+description: 用于在工商变更系统中自动化创建/新增聚合工单（包含工单主信息、变更登记事项明细列表）。
 user-invocable: true
 metadata: {
   "openclaw": {
@@ -21,16 +21,15 @@ metadata: {
 ## 调用指南
 
 ### 1. 触发时机
-当客户明确表达需要"申请工商变更"、"新增变更工单"、"登记工商变更事项"或"指派经办人办理工商业务"时，调用此工具。
+当客户明确表达需要"申请工商变更"、"新增变更工单"或"登记工商变更事项"时，调用此工具。
 
 ### 2. 前置交互
-在调用前，大模型需要通过多轮对话或上下文分析，确保获取到以下**核心三要素**：
+在调用前，大模型需要通过多轮对话或上下文分析，确保获取到以下**核心要素**：
 * **企业信息**：企业名称、统一社会信用代码（18位）
 * **变更事项**：要变更什么（如法定代表人、注册资本等），以及变更前后对比
-* **经办人**：负责跑流程的经办人姓名及联系电话
 
 ### 3. 字段处理规则
-* **格式对齐**：只需输出 `workOrder`、`itemList`、`agentList` 三个根节点，嵌套由脚本自动完成
+* **格式对齐**：只需输出 `workOrder`、`itemList` 两个根节点，嵌套由脚本自动完成
 * **严格对照接口示例**：优先严格对照 `工商变更工单API.md` 第 8.1 节“新增工单”请求体生成参数；如果字段与自然语言描述冲突，以第 8.1 节示例和第 7 节 JSON 结构规范为准
 * **字典值优先**：优先传接口字典 `item_value`，如 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=PENDING`、`itemName=EQUITY`；常见中文别名脚本会自动归一化
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
@@ -81,35 +80,17 @@ metadata: {
       "itemName": "EQUITY",
       "beforeChange": {
         "shareholders": [
-          { "name": "王五", "amount": 3000000, "ratio": 0.60 },
-          { "name": "赵六", "amount": 2000000, "ratio": 0.40 }
+          { "name": "王五", "amount": 3000000, "ratio": 0.60, "certType": "ID_CARD", "certNumber": "310101199001011234" },
+          { "name": "赵六", "amount": 2000000, "ratio": 0.40, "certType": "ID_CARD", "certNumber": "310101198501012345" }
         ]
       },
       "afterChange": {
         "shareholders": [
-          { "name": "王五", "amount": 2550000, "ratio": 0.51 },
-          { "name": "赵六", "amount": 1500000, "ratio": 0.30 },
-          { "name": "孙七", "amount": 950000, "ratio": 0.19 }
+          { "name": "王五", "amount": 2550000, "ratio": 0.51, "certType": "ID_CARD", "certNumber": "310101199001011234", "certFrontUrl": "https://example.com/files/wangwu_front.jpg", "certBackUrl": "https://example.com/files/wangwu_back.jpg" },
+          { "name": "赵六", "amount": 1500000, "ratio": 0.30, "certType": "ID_CARD", "certNumber": "310101198501012345" },
+          { "name": "孙七", "amount": 950000, "ratio": 0.19, "certType": "ID_CARD", "certNumber": "440300198001011234" }
         ]
       }
-    }
-  ],
-  "agentList": [
-    {
-      "agentType": "REG_CONTACT",
-      "agentName": "张三",
-      "agentPhone": "13800138000",
-      "agentIdCard": "310101199001011234",
-      "agentIdentityType": "EMPLOYEE",
-      "idCardFrontUrl": "https://aiqifu.oss-cn-beijing.aliyuncs.com/openclaw/20260524/id-front.jpg",
-      "idCardBackUrl": "https://aiqifu.oss-cn-beijing.aliyuncs.com/openclaw/20260524/id-back.jpg"
-    },
-    {
-      "agentType": "LEGAL_REP",
-      "agentName": "李四",
-      "agentPhone": "13900139000",
-      "agentIdCard": "310101198501012345",
-      "agentIdentityType": "LEGAL_REP"
     }
   ]
 }
@@ -134,17 +115,6 @@ metadata: {
 | beforeChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构，如 `CAPITAL.amount` 单位为元、`EQUITY.ratio` 为 0~1 小数 |
 | afterChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构 |
 
-#### agentList 经办人列表（数组）
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| agentName | ✅ | 经办人姓名 |
-| agentPhone | ✅ | 经办人手机号 |
-| agentIdentityType | ❌ | 身份类型代码，如：`EMPLOYEE`、`LEGAL_REP` |
-| agentType | ❌ | 经办人类型代码，如：`REG_CONTACT`、`REG_AGENT`、`LEGAL_REP` |
-| agentIdCard | ❌ | 经办人身份证号码 |
-| idCardFrontUrl | ❌ | 身份证正面图片URL |
-| idCardBackUrl | ❌ | 身份证反面图片URL |
-
 ### 常见事项类型参考
 - 住所变更 → `matterType: "CHANGE"`，`itemName: "ADDR"`
 - 法定代表人变更 → `matterType: "CHANGE"`，`itemName: "LEGAL"`
@@ -159,4 +129,4 @@ metadata: {
 - `ADDR`：`{"address": "完整经营地址"}`
 - `NAME` / `LEGAL`：`{"name": "名称或姓名"}`
 - `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
-- `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51}]}`
+- `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://..."}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）

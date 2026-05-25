@@ -65,19 +65,6 @@ ITEM_NAME_ALIASES = {
     "股权": "EQUITY",
 }
 
-AGENT_TYPE_ALIASES = {
-    "登记联络人": "REG_CONTACT",
-    "经营主体登记注册代理人": "REG_AGENT",
-    "代理人": "REG_AGENT",
-    "法定代表人": "LEGAL_REP",
-}
-
-AGENT_IDENTITY_ALIASES = {
-    "法定代表人": "LEGAL_REP",
-    "股东": "SHAREHOLDER",
-    "员工": "EMPLOYEE",
-    "其他": "OTHER",
-}
 
 DATE_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -205,6 +192,12 @@ def normalize_equity_change(change: Dict[str, Any]) -> Dict[str, Any]:
                 except (TypeError, ValueError):
                     pass
 
+            # v1.1: 透传股东证件字段（可选）
+            for cert_key in ("certType", "certNumber", "certFrontUrl", "certBackUrl"):
+                cert_value = shareholder.get(cert_key)
+                if cert_value not in (None, ""):
+                    entry[cert_key] = cert_value
+
             if entry:
                 normalized.append(entry)
 
@@ -291,66 +284,6 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     return clean_work_order
 
 
-def normalize_agents(agent_list: Any) -> Any:
-    clean_agents = []
-    for agent in agent_list:
-        if not isinstance(agent, dict):
-            continue
-
-        clean_agent = {}
-        for key in [
-            "agentName", "agentPhone", "agentIdCard",
-            "idCardFrontUrl", "idCardBackUrl"
-        ]:
-            if key in agent and agent[key] not in (None, ""):
-                clean_agent[key] = agent[key]
-
-        clean_agent["agentType"] = normalize_enum(
-            agent.get("agentType"),
-            AGENT_TYPE_ALIASES,
-            "REG_CONTACT",
-        )
-
-        raw_identity = str(agent.get("agentIdentityType") or "").strip()
-        if raw_identity in {"", "1"}:
-            default_identity = "LEGAL_REP" if clean_agent["agentType"] == "LEGAL_REP" else "EMPLOYEE"
-            clean_agent["agentIdentityType"] = default_identity
-        else:
-            clean_agent["agentIdentityType"] = normalize_enum(
-                raw_identity,
-                AGENT_IDENTITY_ALIASES,
-                raw_identity,
-            )
-
-        clean_agents.append(clean_agent)
-
-    return clean_agents
-
-
-def collect_agent_warnings(agent_list: Any) -> Any:
-    warnings = []
-    for index, agent in enumerate(agent_list, start=1):
-        if not isinstance(agent, dict):
-            continue
-
-        agent_type = agent.get("agentType")
-        agent_name = agent.get("agentName") or f"第{index}位经办人"
-        has_front = bool(agent.get("idCardFrontUrl"))
-        has_back = bool(agent.get("idCardBackUrl"))
-
-        if has_front ^ has_back:
-            missing_side = "反面" if has_front else "正面"
-            warnings.append(
-                f"{agent_name} 的身份证{missing_side}URL缺失，当前仅提交了单面证件地址。"
-            )
-
-        if agent_type == "LEGAL_REP" and agent.get("agentIdCard") and agent.get("agentPhone") and not (has_front and has_back):
-            warnings.append(
-                f"{agent_name} 被识别为法定代表人，已提交身份证号和手机号，但身份证正反面URL未完整提交。"
-            )
-
-    return warnings
-
 
 def normalize_items(item_list: Any) -> Any:
     clean_items = []
@@ -374,22 +307,19 @@ def execute(params: Dict[str, Any]) -> str:
     OpenClaw Skill 的标准 Python 执行体
     :param params: 大模型根据 markdown 规范提取出来的结构化 JSON 字典
     """
-    # 提取三大根块
+    # 提取根块
     work_order = params.get("workOrder", {})
     item_list = params.get("itemList", [])
-    agent_list = params.get("agentList", [])
 
     # 基础空值防御
-    if not work_order or not item_list or not agent_list:
+    if not work_order or not item_list:
         return json.dumps({
             "success": False,
-            "message": "Skill 参数校验失败：创建工单必须同时包含工单信息、变更事项及至少一名经办人。"
+            "message": "Skill 参数校验失败：创建工单必须同时包含工单信息（workOrder）和变更事项（itemList）。"
         }, ensure_ascii=False)
 
     clean_work_order = normalize_work_order(work_order)
-    clean_agents = normalize_agents(agent_list)
     clean_items = normalize_items(item_list)
-    warnings = collect_agent_warnings(clean_agents)
 
     if not clean_work_order.get("enterpriseName") or not clean_work_order.get("creditCode"):
         return json.dumps({
@@ -403,23 +333,16 @@ def execute(params: Dict[str, Any]) -> str:
             "message": "Skill 参数校验失败：itemList 不能为空，且每个事项必须包含合法的 itemName。"
         }, ensure_ascii=False)
 
-    if not clean_agents:
-        return json.dumps({
-            "success": False,
-            "message": "Skill 参数校验失败：agentList 不能为空，且至少需要一名合法经办人。"
-        }, ensure_ascii=False)
 
     # 关键点：对齐 Knife4j 页面中展示的"多层包裹（套娃）"兼容逻辑
     # 深度克隆 workOrder 并把子表数组镜像塞入其内部，实现内外层双向对齐
     extended_work_order = {**clean_work_order}
     extended_work_order["itemList"] = clean_items
-    extended_work_order["agentList"] = clean_agents
 
     # 组装发往 JeecgBoot 开放接口的真实 Payload
     final_payload = {
         "workOrder": extended_work_order,
         "itemList": clean_items,
-        "agentList": clean_agents
     }
 
     base_url = os.getenv("TICKET_CREATOR_BASE_URL", "")
@@ -453,8 +376,6 @@ def execute(params: Dict[str, Any]) -> str:
                 "message": f"远端接口返回了非 JSON 内容: {response.text[:300]}"
             }, ensure_ascii=False)
 
-        if isinstance(response_json, dict) and warnings:
-            response_json["warnings"] = warnings
 
         if isinstance(response_json, dict) and response_json.get("success") is False:
             return json.dumps(response_json, ensure_ascii=False)
