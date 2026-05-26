@@ -1,7 +1,7 @@
 # 工商变更工单模块 — 外部系统对接参考文档
 
-> **文档版本**：v1.1  
-> **更新日期**：2026-05-25  
+> **文档版本**：v2.1  
+> **更新日期**：2026-05-26  
 > **适用模块**：工单管理（前端路由 `/bizorder/workOrder`）  
 > **数据来源**：数据库字典（`sys_dict` / `sys_dict_item`）、后端实体与开放接口、前端事项 JSON 表单组件
 
@@ -11,8 +11,10 @@
 
 本系统提供 **工商变更工单** 管理能力，包含：
 
-- **工单主表**（`biz_work_order`）：企业基本信息、类型、状态等
+- **工单主表**（`biz_work_order`）：企业基本信息、类型、状态、客户确认标记等
 - **事项明细表**（`biz_order_item`）：变更登记事项及变更前/后 JSON 数据
+
+> 经办人由后台管理端创建并关联，开放接口 **不涉及** 经办人数据的读写。
 
 外部系统通过 **开放接口**（静态 Token 鉴权）进行读写，接口路径前缀为 `/bizorder/openapi/workOrder/**`，与内部管理端接口（需登录 + 权限）相互独立。
 
@@ -68,7 +70,7 @@
 | 方法 | 路径                                     | 说明                                |
 | ---- | ---------------------------------------- | ----------------------------------- |
 | GET  | `/list`                                  | 分页列表（含事项明细）              |
-| GET  | `/queryById?id={id}`                     | 聚合详情（主单 + 事项）            |
+| GET  | `/queryById?id={id}`                     | 聚合详情（主单 + 事项）             |
 | POST | `/add`                                   | 新增工单（聚合写入）                |
 | PUT  | `/edit`                                  | 编辑工单（主单更新 + 子表全量替换） |
 | POST | `/transit?id={id}&targetStatus={status}` | 状态流转（受状态机约束）            |
@@ -117,28 +119,30 @@
 
 ### 5.2 工单主表 workOrder（biz_work_order）
 
-| 字段           | 类型     | 必填     | 说明                                                  |
-| -------------- | -------- | -------- | ----------------------------------------------------- |
-| id             | string   | 编辑必填 | 主键，新增可不传（系统自动生成）                      |
-| orderNo        | string   | 否       | 工单编号；留空自动生成，规则见 5.3                    |
-| objectType     | string   | 否       | 对象类型，字典 `biz_object_type`，默认 `ENTERPRISE`   |
-| matterType     | string   | 否       | 事项类型，字典 `biz_matter_type`，默认 `CHANGE`       |
-| orderType      | string   | 否       | 工单类型，字典 `biz_order_type`，默认 `BIZ_CHANGE`    |
-| orderStatus    | string   | 否       | 工单状态，字典 `biz_order_status`，新增默认 `PENDING` |
-| enterpriseName | string   | **是**   | 企业名称 / 对象名称                                   |
-| creditCode     | string   | 否       | 18 位统一社会信用代码                                 |
-| createTime     | datetime | —        | 创建时间，格式 `yyyy-MM-dd HH:mm:ss`                  |
-| updateTime     | datetime | —        | 更新时间                                              |
+| 字段             | 类型     | 必填     | 说明                                                         |
+| ---------------- | -------- | -------- | ------------------------------------------------------------ |
+| id               | string   | 编辑必填 | 主键，新增可不传（系统自动生成）                             |
+| orderNo          | string   | 否       | 工单编号；留空自动生成，规则见 5.4                           |
+| objectType       | string   | 否       | 对象类型，字典 `biz_object_type`，默认 `ENTERPRISE`          |
+| matterType       | string   | 否       | 事项类型，字典 `biz_matter_type`，默认 `CHANGE`              |
+| orderType        | string   | 否       | 工单类型，字典 `biz_order_type`，默认 `BIZ_CHANGE`           |
+| orderStatus      | string   | 否       | 工单状态，字典 `biz_order_status`，新增默认 `CONFIRM_BY_C`（待客户确认） |
+| enterpriseName   | string   | **是**   | 企业名称 / 对象名称                                          |
+| creditCode       | string   | 否       | 18 位统一社会信用代码                                        |
+| wechatMappingKey | string   | 否       | 微信路由唯一凭证 Key，格式 `{robot_wxid}:{chat_type}:{target_wxid}`；仅微信群聊渠道发起的工单有此值，后台手动创建的工单为 `null` |
+| createTime       | datetime | —        | 创建时间，格式 `yyyy-MM-dd HH:mm:ss`                         |
+| updateTime       | datetime | —        | 更新时间                                                     |
 
 **字典翻译字段**（仅查询响应可能出现）：`objectType_dictText`、`matterType_dictText`、`orderType_dictText`、`orderStatus_dictText`
 
-### 5.3 工单编号规则
+
+### 5.4 工单编号规则
 
 - 格式：`GS` + `yyyyMMdd` + 6 位序号
 - 示例：`GS20260520000001`
 - 新增时 `orderNo` 为空则服务端自动生成
 
-### 5.4 事项明细 itemList（biz_order_item）
+### 5.5 事项明细 itemList（biz_order_item）
 
 | 字段         | 类型          | 必填   | 说明                                             |
 | ------------ | ------------- | ------ | ------------------------------------------------ |
@@ -161,27 +165,34 @@
 
 后端枚举类：`OrderStatusEnum`（与字典值一致）
 
-| item_text（中文） | item_value（代码） | 说明         |
-| ----------------- | ------------------ | ------------ |
-| 待填报            | PENDING            | 初始状态     |
-| 暂存              | DRAFT              | 草稿         |
-| 材料已保存        | SAVED              | 材料已保存   |
-| 材料已人工确认    | CONFIRMED          | 人工确认完成 |
-| 办理中            | PROCESSING         | 正在办理     |
-| 已办结            | DONE               | 终态         |
+| item_text（中文） | item_value（代码） | 说明                                     |
+| ----------------- | ------------------ | ---------------------------------------- |
+| 待客户确认        | CONFIRM_BY_C       | 开放接口新增默认状态，等待客户在 H5 确认 |
+| 待经办人确认      | CONFIRM_BY_A       | 客户确认后进入，等待后台经办人确认       |
+| 待填报            | PENDING            | 经办人确认后进入                         |
+| 暂存              | DRAFT              | 草稿                                     |
+| 材料已保存        | SAVED              | 材料已保存                               |
+| 材料已人工确认    | CONFIRMED          | 人工确认完成                             |
+| 办理中            | PROCESSING         | 正在办理                                 |
+| 已办结            | DONE               | 终态                                     |
 
 ### 6.2 工单状态流转规则
 
 仅允许以下流转（调用 `/transit` 接口）：
 
 ```
-PENDING    → DRAFT, SAVED
-DRAFT      → SAVED, DRAFT
-SAVED      → CONFIRMED, DRAFT
-CONFIRMED  → PROCESSING
-PROCESSING → DONE
-DONE       → （不可再流转）
+CONFIRM_BY_C → CONFIRM_BY_A   （客户 H5 确认，自动流转）
+CONFIRM_BY_A → PENDING        （后台经办人确认）
+PENDING      → DRAFT, SAVED
+DRAFT        → SAVED, DRAFT
+SAVED        → CONFIRMED, DRAFT
+CONFIRMED    → PROCESSING
+PROCESSING   → DONE
+DONE         → （不可再流转）
 ```
+
+> `CONFIRM_BY_C → CONFIRM_BY_A` 由 H5 的「确认资料无误」按钮触发（接口 `/bizorder/workOrder/confirmByCustomer`），非 `/transit` 接口。
+> `CONFIRM_BY_A → PENDING` 由后台管理端「经办人确认」按钮触发（接口 `/bizorder/workOrder/confirmByAgent`），非 `/transit` 接口。
 
 非法流转将返回业务异常，如：`工单状态不允许从 PENDING 流转到 DONE`。
 
@@ -229,7 +240,6 @@ DONE       → （不可再流转）
 | 经营地址   | ADDR       | 多行文本 `address` |
 | 法定代表人 | LEGAL      | 单字段 `name`      |
 
-
 ---
 
 ## 7. 事项明细 JSON 字段规范（重点）
@@ -267,15 +277,35 @@ DONE       → （不可再流转）
 {
   "amount": 5000000,
   "currency": "CNY",
-  "contributionType": "货币"
+  "shareholders": [
+    {
+      "name": "张三",
+      "amount": 2500000,
+      "ratio": 0.50
+    },
+    {
+      "name": "李四",
+      "amount": 2500000,
+      "ratio": 0.50
+    }
+  ]
 }
 ```
 
-| 字段             | 类型   | 必填 | 说明                                            |
-| ---------------- | ------ | ---- | ----------------------------------------------- |
-| amount           | number | 是   | 注册资本金额，单位：**元**                      |
-| currency         | string | 否   | 币种代码，默认 `CNY`                            |
-| contributionType | string | 否   | 出资方式，如 `货币`（扩展字段，前端表单未强制） |
+| 字段                  | 类型   | 必填           | 说明                                       |
+| --------------------- | ------ | -------------- | ------------------------------------------ |
+| amount                | number | 是             | 注册资本金额，单位：**元**                 |
+| currency              | string | 否             | 币种代码，默认 `CNY`                       |
+| shareholders          | array  | 否             | 股东出资明细列表                           |
+| shareholders[].name   | string | 是(若有该对象) | 股东姓名 / 企业名称                        |
+| shareholders[].amount | number | 是(若有该对象) | 出资额，单位：**元**                       |
+| shareholders[].ratio  | number | 是(若有该对象) | 出资比例，**0~1 小数**（如 0.50 表示 50%） |
+
+**约定说明**：
+
+- 所有股东 `ratio` 之和建议等于 `1`（100%）
+- 前端编辑表单按 **0~1 小数** 存储 `ratio`；展示时乘以 100 显示为百分数
+- 过滤掉 name、amount、ratio 均为空的股东行
 
 **币种代码（前端约定）**：
 
@@ -419,8 +449,7 @@ Content-Type: application/json
     "creditCode": "91310000MA002B002X",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
-    "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderType": "BIZ_CHANGE"
   },
   "itemList": [
     {
@@ -428,12 +457,18 @@ Content-Type: application/json
       "beforeChange": {
         "amount": 1000000,
         "currency": "CNY",
-        "contributionType": "货币"
+        "shareholders": [
+          { "name": "张三", "amount": 600000, "ratio": 0.60 },
+          { "name": "李四", "amount": 400000, "ratio": 0.40 }
+        ]
       },
       "afterChange": {
         "amount": 5000000,
         "currency": "CNY",
-        "contributionType": "货币"
+        "shareholders": [
+          { "name": "张三", "amount": 3000000, "ratio": 0.60 },
+          { "name": "李四", "amount": 2000000, "ratio": 0.40 }
+        ]
       }
     },
     {
@@ -509,8 +544,8 @@ X-Open-Token: <your-token>
       "id": "...",
       "orderId": "2050000000000005002",
       "itemName": "CAPITAL",
-      "beforeChange": { "amount": 1000000, "currency": "CNY" },
-      "afterChange": { "amount": 5000000, "currency": "CNY" }
+      "beforeChange": { "amount": 1000000, "currency": "CNY", "shareholders": [{ "name": "张三", "amount": 600000, "ratio": 0.60 }] },
+      "afterChange": { "amount": 5000000, "currency": "CNY", "shareholders": [{ "name": "张三", "amount": 3000000, "ratio": 0.60 }] }
     }
   ]
 }
@@ -532,9 +567,9 @@ X-Open-Token: <your-token>
 调用 `/edit` 时：
 
 1. `workOrder.id` **必填**
-2. 事项明细子表采用 **先逻辑删除再全量重插** 策略
+2. 事项明细采用 **先逻辑删除再全量重插** 策略
 3. 子表记录的 `id` 可不传，服务端会重新生成
-4. 未传的 `itemList` 视为空列表（会清空原有子表数据）
+4. 未传的 `itemList` 视为空列表（会清空原有事项数据）
 
 ---
 
@@ -584,3 +619,5 @@ GET /jeecg-boot/sys/dict/getDictItems/biz_item_name
 | ---- | ---------- | ------------------------------------------------------------ |
 | v1.0 | 2026-05-24 | 首版：整合字典、状态机、事项 JSON 规范及开放接口说明         |
 | v1.1 | 2026-05-25 | EQUITY 事项增加股东证件字段（certType / certNumber / certFrontUrl / certBackUrl） |
+| v2.0 | 2026-05-26 | 去除经办人相关内容（由后台管理端创建关联）；新增 CONFIRM_BY_C / CONFIRM_BY_A 状态；新增 customerConfirmed 字段；开放接口新增默认状态改为 CONFIRM_BY_C |
+| v2.1 | 2026-05-26 | CAPITAL（注册资本）事项新增 `shareholders` 股东出资明细字段；移除 `contributionType` 字段 |

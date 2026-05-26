@@ -42,6 +42,8 @@ ORDER_TYPE_ALIASES = {
 }
 
 ORDER_STATUS_ALIASES = {
+    "待客户确认": "CONFIRM_BY_C",
+    "待经办人确认": "CONFIRM_BY_A",
     "待填报": "PENDING",
     "暂存": "DRAFT",
     "材料已保存": "SAVED",
@@ -168,6 +170,25 @@ def parse_shareholders_from_text(text: str) -> Any:
     return {"shareholders": shareholders} if shareholders else None
 
 
+def parse_ratio_to_float(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            val = float(value)
+        else:
+            text = str(value).strip()
+            if text.endswith("%"):
+                val = float(text[:-1]) / 100
+            else:
+                val = float(text)
+        
+        return round(val / 100, 4) if val > 1 else val
+    except (TypeError, ValueError):
+        return None
+
+
+
 def normalize_equity_change(change: Dict[str, Any]) -> Dict[str, Any]:
     shareholders = change.get("shareholders")
     if isinstance(shareholders, list):
@@ -185,12 +206,9 @@ def normalize_equity_change(change: Dict[str, Any]) -> Dict[str, Any]:
                 entry["amount"] = amount
 
             ratio = shareholder.get("ratio")
-            if ratio not in (None, ""):
-                try:
-                    ratio_value = float(ratio)
-                    entry["ratio"] = round(ratio_value / 100, 4) if ratio_value > 1 else ratio_value
-                except (TypeError, ValueError):
-                    pass
+            ratio_value = parse_ratio_to_float(ratio)
+            if ratio_value is not None:
+                entry["ratio"] = ratio_value
 
             # v1.1: 透传股东证件字段（可选）
             for cert_key in ("certType", "certNumber", "certFrontUrl", "certBackUrl"):
@@ -224,8 +242,30 @@ def normalize_capital_change(change: Dict[str, Any]) -> Dict[str, Any]:
 
     currency = change.get("currency") or "CNY"
     result = {"amount": amount, "currency": currency}
-    if change.get("contributionType"):
-        result["contributionType"] = change["contributionType"]
+
+    # v2.1: 处理 CAPITAL 中的 shareholders
+    shareholders = change.get("shareholders")
+    if isinstance(shareholders, list):
+        normalized_shs = []
+        for sh in shareholders:
+            if not isinstance(sh, dict):
+                continue
+            entry = {}
+            if sh.get("name"):
+                entry["name"] = sh["name"]
+            
+            sh_amount = parse_amount_to_yuan(sh.get("amount"))
+            if sh_amount is not None:
+                entry["amount"] = sh_amount
+                
+            sh_ratio = sh.get("ratio")
+            ratio_value = parse_ratio_to_float(sh_ratio)
+            if ratio_value is not None:
+                entry["ratio"] = ratio_value
+            if entry:
+                normalized_shs.append(entry)
+        result["shareholders"] = normalized_shs
+
     return result
 
 
@@ -254,7 +294,8 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     clean_work_order = {}
     for key in [
         "enterpriseName", "creditCode", "objectType",
-        "matterType", "orderType", "orderStatus"
+        "matterType", "orderType", "orderStatus",
+        "wechatMappingKey"
     ]:
         value = work_order.get(key)
         if value not in (None, ""):
@@ -278,7 +319,7 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     clean_work_order["orderStatus"] = normalize_enum(
         clean_work_order.get("orderStatus"),
         ORDER_STATUS_ALIASES,
-        "PENDING",
+        "CONFIRM_BY_C",
     )
 
     return clean_work_order
@@ -307,8 +348,21 @@ def execute(params: Dict[str, Any]) -> str:
     OpenClaw Skill 的标准 Python 执行体
     :param params: 大模型根据 markdown 规范提取出来的结构化 JSON 字典
     """
-    # 提取根块
+    # 自动提取会话路由键并注入 (支持从顶层参数、workOrder 内部、以及环境变量中获取)
     work_order = params.get("workOrder", {})
+    session_key = (
+        params.get("sessionKey") or
+        params.get("session_key") or
+        work_order.get("sessionKey") or
+        work_order.get("session_key") or
+        work_order.get("wechatMappingKey") or
+        os.getenv("OPENCLAW_SESSION_KEY")
+    )
+
+    if session_key:
+        work_order = {**work_order, "wechatMappingKey": session_key}
+
+    # 提取根块
     item_list = params.get("itemList", [])
 
     # 基础空值防御

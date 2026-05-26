@@ -27,31 +27,33 @@ metadata: {
 在调用前，大模型需要通过多轮对话或上下文分析，确保获取到以下**核心要素**：
 * **企业信息**：企业名称、统一社会信用代码（18位）
 * **变更事项**：要变更什么（如法定代表人、注册资本等），以及变更前后对比
+* **会话路由（微信会话 Key）**：如果在当前微信会话中，**必须**先调用 `session_status` 工具并提取其返回结果中的 `Session` 字段值作为 `sessionKey` 传入（或填入 `workOrder.wechatMappingKey`），以绑定聊天通道。
 
 ### 3. 字段处理规则
 * **格式对齐**：只需输出 `workOrder`、`itemList` 两个根节点，嵌套由脚本自动完成
 * **严格对照接口示例**：优先严格对照 `工商变更工单API.md` 第 8.1 节“新增工单”请求体生成参数；如果字段与自然语言描述冲突，以第 8.1 节示例和第 7 节 JSON 结构规范为准
-* **字典值优先**：优先传接口字典 `item_value`，如 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=PENDING`、`itemName=EQUITY`；常见中文别名脚本会自动归一化
+* **字典值优先**：优先传接口字典 `item_value`，如 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=CONFIRM_BY_C`、`itemName=EQUITY`；常见中文别名脚本会自动归一化
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
 * **JSON 节点**：`beforeChange` 和 `afterChange` 必须是明确的 K-V 对象
-* **默认值**：未提供时默认 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=PENDING`
+* **默认值**：未提供时默认 `objectType=ENTERPRISE`、`matterType=CHANGE`、`orderType=BIZ_CHANGE`、`orderStatus=CONFIRM_BY_C`
 * **可选字段**：如用户提供身份证照片URL、身份证号等，应一并传入
 
 ---
 
 ## 输入参数
 
-大模型提取后的 JSON 传入 `ticket_creator.py` 执行：
+大模型提取后的 JSON 作为参数，通过运行 `python3 skills/ticket-creator/ticket_creator.py '<JSON_PARAMS>'` 执行：
 
 ```json
 {
+  "sessionKey": "agent:main:dashboard:2cfd8ac5-0664-451a-a5f1-8d620b9da1ad",
   "workOrder": {
     "enterpriseName": "上海星辰贸易有限公司",
     "creditCode": "91310000MA002B002X",
     "matterType": "CHANGE",
     "objectType": "ENTERPRISE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C"
   },
   "itemList": [
     {
@@ -59,12 +61,18 @@ metadata: {
       "beforeChange": {
         "amount": 1000000,
         "currency": "CNY",
-        "contributionType": "货币"
+        "shareholders": [
+          { "name": "张三", "amount": 600000, "ratio": 0.60 },
+          { "name": "李四", "amount": 400000, "ratio": 0.40 }
+        ]
       },
       "afterChange": {
         "amount": 5000000,
         "currency": "CNY",
-        "contributionType": "货币"
+        "shareholders": [
+          { "name": "张三", "amount": 3000000, "ratio": 0.60 },
+          { "name": "李四", "amount": 2000000, "ratio": 0.40 }
+        ]
       }
     },
     {
@@ -98,6 +106,11 @@ metadata: {
 
 ### 字段说明
 
+#### 顶层参数 (Root Parameters)
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| sessionKey | ❌ | 微信会话唯一 Key。调用 `session_status` 接口后从中提取 `Session` 字段值传入，用于静默匹配聊天通道。 |
+
 #### workOrder 工单主信息
 | 字段 | 必填 | 说明 |
 |------|------|------|
@@ -106,7 +119,8 @@ metadata: {
 | matterType | ✅ | 事项类型代码，通常传 `CHANGE` |
 | objectType | ❌ | 对象类型，默认空 |
 | orderType | ❌ | 工单类型，默认空 |
-| orderStatus | ❌ | 工单状态，默认空 |
+| orderStatus | ❌ | 工单状态，默认空（开放接口新增默认为 `CONFIRM_BY_C`） |
+| wechatMappingKey | ❌ | 微信路由凭证键（可选，若传入 sessionKey 则程序会自动将其作为 wechatMappingKey 注入，不需人工传值） |
 
 #### itemList 变更登记事项列表（数组）
 | 字段 | 必填 | 说明 |
@@ -124,7 +138,7 @@ metadata: {
 - 股东/股权变更 → `matterType: "CHANGE"`，`itemName: "EQUITY"`
 
 ### 事项 JSON 结构要求
-- `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "contributionType": "货币"}`
+- `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "shareholders": [{"name": "张三", "amount": 2500000, "ratio": 0.50}]}`
 - `SCOPE`：`{"scope": "经营范围全文"}`
 - `ADDR`：`{"address": "完整经营地址"}`
 - `NAME` / `LEGAL`：`{"name": "名称或姓名"}`

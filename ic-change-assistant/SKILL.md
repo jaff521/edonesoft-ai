@@ -34,14 +34,14 @@ metadata: {
 
 ### Step 0-1: 身份确认与数据拉取
 - 询问公司全称。
-- 接收名称后，调用 `unified_query.py` 脚本自动查询获取：**法定代表人姓名、注册资本、原股东列表（名称、金额、类型、占比）**。
+- 接收名称后，通过调用 `skills/ic-change-assistant/unified_query.py` 脚本自动查询获取：**法定代表人姓名、注册资本、原股东列表（名称、金额、类型、占比）**。
 
 #### 脚本调用方式
-**脚本文件**：`unified_query.py`
+**脚本文件**：`skills/ic-change-assistant/unified_query.py`
 
 **调用命令**
 ```bash
-python3 unified_query.py "{公司全称}"
+python3 skills/ic-change-assistant/unified_query.py "{公司全称}"
 ```
 
 **输出示例**（JSON 格式）
@@ -162,13 +162,14 @@ python3 unified_query.py "{公司全称}"
 - 在材料收集过程中，内部始终维护以下中间态，后续任务资料和工单创建均直接复用：
 ```json
 {
+  "sessionKey": "{sessionKey}",
   "workOrderDraft": {
     "enterpriseName": "{companyName}",
     "creditCode": "{creditCode}",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C"
   },
   "itemListDraft": []
 }
@@ -178,12 +179,12 @@ python3 unified_query.py "{公司全称}"
 ### Step 6: 证件材料补齐 (队列模式)
 - 大模型根据新设立/变更后的股东名单，逐一向客户索要所需的证件材料，并直接回填至 `itemListDraft`：
   - **自然人股东**：请求提供身份证正反面和身份证号。
-    - 调用 `validate_document.py` 验证身份证照片。
+    - 调用 `skills/ic-change-assistant/validate_document.py` 验证身份证照片。
     - 若输入是远程图片 URL，先下载到临时文件。
     - 调用 `oss-uploader` skill 上传证件图片到 OSS，获取正面与反面 OSS URL。
     - 验证识别的姓名与股东名单是否一致。一致后，直接将证件号码回填至对应股东的 `certNumber`，正面 URL 填入 `certFrontUrl`，反面 URL 填入 `certBackUrl`，并将 `certType` 固定设为 `"ID_CARD"`。
   - **企业法人股东**：请求营业执照照片和统一社会信用代码。
-    - 调用 `validate_document.py` 验证营业执照。
+    - 调用 `skills/ic-change-assistant/validate_document.py` 验证营业执照。
     - 若输入是远程图片 URL，先下载到临时文件。
     - 调用 `oss-uploader` skill 上传执照到 OSS。
     - 验证识别的企业名称与股东名单是否一致。一致后，直接将信用代码回填至对应股东的 `certNumber`，执照 URL 填入 `certFrontUrl`，并将 `certType` 固定设为 `"BUSINESS_LICENSE"`。
@@ -210,18 +211,20 @@ python3 unified_query.py "{公司全称}"
 
 #### 7.1 数据归档 ("任务资料")
 - 客户回复"确认"后，生成 JSON 格式的任务资料文件。
-- **文件结构与 ticket-creator 严格保持 1:1 一致**，只包含 `workOrder` 和 `itemList` 两大核心根节点，去除一切冗余字段（如 `materials`、`validation`、`changes` 等）。
+- **文件结构与 ticket-creator 严格保持 1:1 一致**，包含顶层 `sessionKey`，以及 `workOrder` 和 `itemList` 两大核心根节点，并自动写入微信会话路由凭证 `wechatMappingKey`。
 
 **文件结构**
 ```json
 {
+  "sessionKey": "{sessionKey}",
   "workOrder": {
     "enterpriseName": "{companyName}",
     "creditCode": "{creditCode}",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C",
+    "wechatMappingKey": "{wechatMappingKey}"
   },
   "itemList": [
     {
@@ -286,18 +289,21 @@ python3 unified_query.py "{公司全称}"
 - 若某位自然人股东仅收集到单面证件 URL，且其他字段已回填，可以向客户提示“仅上传了单面证件，可能影响审核，是否继续提交”，待确认后继续提交。
 
 - 确认客户回复"确认"后，直接以归档的任务资料 JSON 作为参数，调用 `ticket-creator` skill 创建工单。
+- 如果在当前会话环境，**必须**调用 `session_status` 工具并提取其结果中的 `Session` 字段值作为 `sessionKey` 传入，这样在创建工单时程序会自动将其值作为 `wechatMappingKey` 注入工单。
 
 **调用方式**（直接透传归档的任务资料 payload 作为参数调用）
 ```yaml
 Skill: ticket-creator
   参数:
+    sessionKey: "{sessionKey}" # 可选。通过调用 session_status 工具获取其结果中的 'Session' 字段值传入，用于微信路由绑定
     workOrder:
       enterpriseName: "{companyName}"
       creditCode: "{creditCode}"
       objectType: "ENTERPRISE"
       matterType: "CHANGE"
       orderType: "BIZ_CHANGE"
-      orderStatus: "PENDING"
+      orderStatus: "CONFIRM_BY_C"
+      wechatMappingKey: "{wechatMappingKey}" # 可选，程序内部会自动将其值直接作为 wechatMappingKey 注入，亦可手动填入
     itemList:
       - itemName: "EQUITY"
         beforeChange:
@@ -347,13 +353,14 @@ Skill: ticket-creator
 **Step A：查询后形成的标准中间态**
 ```json
 {
+  "sessionKey": "agent:main:dashboard:2cfd8ac5-0664-451a-a5f1-8d620b9da1ad",
   "workOrderDraft": {
     "enterpriseName": "上海玄鲲信息科技有限公司",
     "creditCode": "91310112MA1GDR016W",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C"
   },
   "itemListDraft": [
     {
@@ -388,13 +395,14 @@ Skill: ticket-creator
 **Step B：Step 6 收齐材料并回填后的中间态**
 ```json
 {
+  "sessionKey": "agent:main:dashboard:2cfd8ac5-0664-451a-a5f1-8d620b9da1ad",
   "workOrderDraft": {
     "enterpriseName": "上海玄鲲信息科技有限公司",
     "creditCode": "91310112MA1GDR016W",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C"
   },
   "itemListDraft": [
     {
@@ -429,13 +437,15 @@ Skill: ticket-creator
 **Step C：最终归档任务资料（与 ticket-creator 提交入参完全一致）**
 ```json
 {
+  "sessionKey": "agent:main:dashboard:2cfd8ac5-0664-451a-a5f1-8d620b9da1ad",
   "workOrder": {
     "enterpriseName": "上海玄鲲信息科技有限公司",
     "creditCode": "91310112MA1GDR016W",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE",
-    "orderStatus": "PENDING"
+    "orderStatus": "CONFIRM_BY_C",
+    "wechatMappingKey": "1688857086919052:group:10698454991379777"
   },
   "itemList": [
     {
