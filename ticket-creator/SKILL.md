@@ -144,3 +144,37 @@ metadata: {
 - `NAME` / `LEGAL`：`{"name": "名称或姓名"}`
 - `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
 - `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://..."}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）
+
+---
+
+## 工单创建后的回复规范
+
+脚本执行成功后，返回 JSON 中会包含以下额外字段：
+
+| 字段          | 说明 |
+|--------------|------|
+| `ticket_id`  | 工单在系统中的唯一 ID（雪花主键，如 `2062738766116786178`） |
+| `confirm_url`| 工单 H5 确认页完整链接，格式：`{base}/bizorder/h5?id={ticket_id}` |
+
+### ✅ 回复模板（工单创建成功）
+
+当脚本返回 `success=true` 且包含 `confirm_url` 字段时，**必须**按如下格式回复用户，将链接作为可点击的超链接呈现：
+
+> ✅ 工单已创建，工单号：`{ticket_id}`，相关材料已归档。
+>
+> 👉 请点击以下链接进入工单页面，完成人工确认操作：
+> [{confirm_url}]({confirm_url})
+>
+> 如有疑问，请联系客服。
+
+### ⚠️ 无法获取链接时的降级回复
+
+若 `confirm_url` 字段缺失（极少数情况），回复：
+
+> ✅ 工单已创建，工单号：`{ticket_id}`，相关材料已归档，请在系统后台完成人工确认。
+
+### 环境变量说明
+
+| 变量名 | 说明 |
+|--------|------|
+| `TICKET_CREATOR_H5_BASE_URL` | H5 确认页 Base URL（如 `http://139.196.78.56:8000`）。若未配置，自动回退使用 `TICKET_CREATOR_BASE_URL`。 |

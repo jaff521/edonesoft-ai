@@ -434,7 +434,29 @@ def execute(params: Dict[str, Any]) -> str:
         if isinstance(response_json, dict) and response_json.get("success") is False:
             return json.dumps(response_json, ensure_ascii=False)
 
-        return json.dumps(response_json, ensure_ascii=False)
+        # 从 result 字段解析工单 ID，例如 "添加成功！id=2050000000000005001"
+        ticket_id = None
+        result_str = response_json.get("result", "") if isinstance(response_json, dict) else ""
+        if isinstance(result_str, str) and "id=" in result_str:
+            try:
+                ticket_id = result_str.split("id=")[-1].strip()
+            except Exception:
+                ticket_id = None
+
+        # 组装 H5 确认页 URL，方便用户在聊天界面中点击直达工单
+        confirm_url = None
+        if ticket_id:
+            h5_base = os.getenv("TICKET_CREATOR_H5_BASE_URL", base_url)
+            confirm_url = f"{h5_base}/bizorder/h5?id={ticket_id}"
+
+        # 将工单 ID 和确认 URL 附加到返回结果中供 LLM 使用
+        enriched = dict(response_json) if isinstance(response_json, dict) else {"raw": response_json}
+        if ticket_id:
+            enriched["ticket_id"] = ticket_id
+        if confirm_url:
+            enriched["confirm_url"] = confirm_url
+
+        return json.dumps(enriched, ensure_ascii=False)
 
     except requests.exceptions.RequestException as e:
         return json.dumps({"success": False, "message": f"连接物理接口产生网络异常: {str(e)}"}, ensure_ascii=False)

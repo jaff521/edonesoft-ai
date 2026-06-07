@@ -1,0 +1,574 @@
+# AI Workers — 工商变更自动化平台 项目文档
+
+> **项目路径**：`/Users/suf1234/code-spaces/edonesoft/ai-workers/skills`
+> **文档版本**：v1.0  
+> **更新日期**：2026-06-07
+
+---
+
+## 目录
+
+1. [项目概述](#1-项目概述)
+2. [整体架构](#2-整体架构)
+3. [工作流全貌](#3-工作流全貌)
+4. [Skill 模块详解](#4-skill-模块详解)
+   - 4.1 [ic-portal-assistant — 入口路由](#41-ic-portal-assistant--入口路由)
+   - 4.2 [ic-change-assistant — 变更信息收集](#42-ic-change-assistant--变更信息收集)
+   - 4.3 [ic-reduction-assistant — 减资助手](#43-ic-reduction-assistant--减资助手)
+   - 4.4 [ticket-creator — 工单创建](#44-ticket-creator--工单创建)
+   - 4.5 [ic-rpa-executor — RPA 自动执行](#45-ic-rpa-executor--rpa-自动执行)
+   - 4.6 [oss-uploader — 文件上传](#46-oss-uploader--文件上传)
+5. [工单状态机](#5-工单状态机)
+6. [环境变量配置](#6-环境变量配置)
+7. [服务依赖关系](#7-服务依赖关系)
+8. [数据结构参考](#8-数据结构参考)
+9. [错误处理与安全机制](#9-错误处理与安全机制)
+10. [文件目录树](#10-文件目录树)
+
+---
+
+## 1. 项目概述
+
+本项目是一套基于 **OpenClaw AI Agent 平台**构建的工商变更全流程自动化系统。通过微信群聊作为交互入口，引导客户完成工商变更信息收集、工单创建、材料归档，并由 RPA 机器人自动在一网通办政府平台上完成申报操作。
+
+**核心目标**：
+
+| 阶段 | 描述 |
+|------|------|
+| 信息收集 | AI 对话引导客户提供变更信息，自动 OCR 识别证件材料 |
+| 工单创建 | 将收集信息自动提交至工单系统，生成工单并返回确认链接 |
+| 人工确认 | 客户点击 H5 链接在线确认工单信息 |
+| RPA 执行 | 管理员触发 RPA，自动扫码登录政府平台并完成申报 |
+| 状态通知 | 全程关键节点通过微信群实时推送进度消息 |
+
+---
+
+## 2. 整体架构
+
+```
+微信群聊 (客户)
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│          OpenClaw Gateway（消息路由网关）             │
+│  session_key → mapping_key 映射，负责收发消息        │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│              ic-portal-assistant（入口 Skill）        │
+│  展示业务菜单，按客户选择路由到子 Skill              │
+└───────────────┬──────────────┬──────────────────────┘
+                │              │
+       ┌────────┘              └───────────┐
+       ▼                                   ▼
+┌──────────────────────┐     ┌─────────────────────────┐
+│  ic-change-assistant │     │  ic-reduction-assistant │
+│  股权变更 / 期限变更 │     │  注册资本减少（减资）   │
+└──────────┬───────────┘     └────────────┬────────────┘
+           │                              │
+           └──────────────┬───────────────┘
+                          ▼
+           ┌──────────────────────────────┐
+           │      ticket-creator Skill    │
+           │  归一化数据 → 创建工单       │
+           │  返回 ticket_id + confirm_url│
+           └──────────────┬───────────────┘
+                          │
+                          ▼
+           ┌──────────────────────────────┐
+           │      JeecgBoot 工单系统      │
+           │  bizorder OpenAPI            │
+           │  状态：CONFIRM_BY_C → ...   │
+           └──────────────┬───────────────┘
+                          │ 管理员手动触发
+                          ▼
+           ┌──────────────────────────────┐
+           │      ic-rpa-executor Skill   │
+           │  状态校验 → 扫码登录 → RPA  │
+           └──────────────┬───────────────┘
+                          │
+                          ▼
+           ┌──────────────────────────────┐
+           │      RPA 服务（一网通办）    │
+           │  capital-reduction API       │
+           └──────────────────────────────┘
+```
+
+---
+
+## 3. 工作流全貌
+
+```mermaid
+flowchart TD
+    A([客户发起咨询]) --> B[ic-portal-assistant\n展示业务菜单]
+    B --> C{客户选择}
+    C -->|股权变更 / 期限变更| D[ic-change-assistant\n收集变更信息]
+    C -->|注册资本减少| E[ic-reduction-assistant\n减资信息收集]
+    D --> F[oss-uploader\n证件材料上传 OSS]
+    E --> F
+    F --> G[ticket-creator\n创建工单]
+    G --> H{API 响应}
+    H -->|成功| I[返回 ticket_id + confirm_url\n推送给客户]
+    H -->|失败| J[告知错误 / 重试]
+    I --> K([客户点击链接\nH5 页面人工确认])
+    K --> L[工单状态: PENDING]
+    L --> M([管理员手动触发 ic-rpa-executor])
+    M --> N{状态校验}
+    N -->|非 PENDING| O[中止并记录]
+    N -->|PENDING| P[校验经办人信息]
+    P -->|缺失| Q[推送告警到群聊]
+    P -->|完整| R[检测一网通办登录状态]
+    R -->|已登录| U[执行 RPA 事项]
+    R -->|未登录| S[获取二维码\n推送到微信群]
+    S --> T{每5秒轮询登录\n最多5分钟}
+    T -->|登录成功| U
+    T -->|超时 且已发过二维码| V[推送超时通知]
+    T -->|超时 全程无二维码| W[静默记录日志]
+    U --> X[工单状态 → PROCESSING]
+    X --> Y([推送完成通知])
+```
+
+---
+
+## 4. Skill 模块详解
+
+### 4.1 ic-portal-assistant — 入口路由
+
+**文件**：[ic-portal-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-portal-assistant/SKILL.md)
+
+**职责**：作为第一入口，展示业务菜单，并根据客户选择智能路由到对应子 Skill。
+
+**支持的业务类型**：
+
+| 编号 | 业务名称 | 路由目标 | 入参 |
+|------|---------|---------|------|
+| 1 | 经营期限变更 | `ic-change-assistant` | `selectedMatters: ["PERIOD"]` |
+| 2 | 股权变更 | `ic-change-assistant` | `selectedMatters: ["EQUITY"]` |
+| 1+2 | 期限 + 股权（组合） | `ic-change-assistant` | `selectedMatters: ["PERIOD", "EQUITY"]` |
+| 3 | 注册资本减少 | `ic-reduction-assistant` | — |
+
+**异常处理**：超出支持范围的变更类型（如设立、注销、经营范围）礼貌告知并引导人工客服。
+
+---
+
+### 4.2 ic-change-assistant — 变更信息收集
+
+**文件**：[ic-change-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-change-assistant/SKILL.md)
+
+**脚本**：
+- [unified_query.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-change-assistant/unified_query.py) — 企业信息查询（企信查 API）
+- [validate_document.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-change-assistant/validate_document.py) — 证件 OCR 识别（DashScope 视觉模型）
+
+**支持的变更事项**：`PERIOD`（经营期限）、`EQUITY`（股权变更）
+
+**核心流程**：
+
+```
+Step 1: 接收入参 selectedMatters → 明确本次办理项目
+Step 2: 企业信息核验（统一信用代码 + 企信查 API 验证）
+Step 3: 分事项收集信息
+    └─ PERIOD: 收集期限类型（fixed/forever）+ 起止日期
+    └─ EQUITY: 收集股东结构（变更前/后）+ OCR 识别身份证
+Step 4: 汇总确认（向客户展示摘要，等待"确认"）
+Step 5: 调用 session_status 获取 sessionKey
+Step 6: 以归档 JSON 调用 ticket-creator 创建工单
+Step 7: 回复 confirm_url 链接供客户点击确认
+```
+
+**依赖环境变量**：
+
+| 变量 | 用途 |
+|------|------|
+| `QYXQK_APP_ID` / `QYXQK_SECRET` | 企信查 API 鉴权 |
+| `QYXQK_FUZZY_QUERY_API` | 企业模糊查询接口 |
+| `QYXQK_SHAREHOLDER_API` | 股东信息查询接口 |
+| `DASHSCOPE_API_KEY` | 阿里云 DashScope OCR |
+| `DASHSCOPE_VISION_MODEL` | 视觉模型名称（`qwen-vl-max`） |
+
+---
+
+### 4.3 ic-reduction-assistant — 减资助手
+
+**文件**：[ic-reduction-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-reduction-assistant/SKILL.md)
+
+**脚本**：[unified_query.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-reduction-assistant/unified_query.py)
+
+**职责**：专门处理注册资本减少（减资）场景。自动按变更前股东比例推算变更后股东出资额，无需客户手动计算。
+
+**核心逻辑**：
+- 收集：原资本额、目标减资额、各股东名称+出资比例
+- 计算：`变更后出资额 = 目标资本额 × 股东持股比例`
+- 提交：调用 `ticket-creator`，`itemName=CAPITAL`
+
+**成功回复规范**：
+
+```
+✅ 减资变更工单已创建，工单号：`{ticket_id}`，相关材料已归档。
+
+👉 请点击以下链接进入工单页面，完成人工确认操作：
+{confirm_url}
+```
+
+---
+
+### 4.4 ticket-creator — 工单创建
+
+**文件**：[ticket-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ticket-creator/SKILL.md)  
+**脚本**：[ticket_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ticket-creator/ticket_creator.py)  
+**API 文档**：[工商变更工单API.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ticket-creator/工商变更工单API.md)
+
+**职责**：将 LLM 提取的结构化变更信息归一化并提交至工单系统，返回工单 ID 和 H5 确认链接。
+
+#### 输入参数结构
+
+```json
+{
+  "sessionKey": "agent:main:dashboard:xxx",
+  "workOrder": {
+    "enterpriseName": "上海星辰贸易有限公司",
+    "creditCode": "91310000MA002B002X",
+    "matterType": "CHANGE",
+    "objectType": "ENTERPRISE",
+    "orderType": "BIZ_CHANGE",
+    "orderStatus": "CONFIRM_BY_C"
+  },
+  "itemList": [
+    {
+      "itemName": "EQUITY",
+      "beforeChange": { "shareholders": [...] },
+      "afterChange": { "shareholders": [...] }
+    }
+  ]
+}
+```
+
+#### 数据归一化处理
+
+脚本内置以下自动转换逻辑：
+
+| 功能 | 说明 |
+|------|------|
+| 中文别名映射 | "变更" → `CHANGE`，"企业" → `ENTERPRISE` 等 |
+| 金额单位转换 | "500万" → `5000000`（元，整型） |
+| 比例归一化 | `60%` 或 `0.60` 统一转为 `0~1` 小数 |
+| 期限归一化 | "长期" → `{type: "forever"}`，日期字符串 → `{type: "fixed", date: "..."}` |
+| 股东文本解析 | 自然语言股东描述自动提取为结构化 `shareholders` 数组 |
+| sessionKey 注入 | 自动将 `sessionKey` 写入 `wechatMappingKey` 字段 |
+| 审计字段过滤 | 自动过滤 `id`、`createTime` 等后端填充字段 |
+
+#### 返回值结构（成功）
+
+```json
+{
+  "success": true,
+  "result": "添加成功！id=2062738766116786178",
+  "ticket_id": "2062738766116786178",
+  "confirm_url": "http://139.196.78.56:8000/bizorder/h5?id=2062738766116786178"
+}
+```
+
+#### 依赖环境变量
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `TICKET_CREATOR_BASE_URL` | ✅ | 工单系统 API Base，如 `http://139.196.78.56:8081/jeecg-boot` |
+| `TICKET_CREATOR_OPEN_TOKEN` | ✅ | 静态鉴权 Token（`X-Open-Token` 请求头） |
+| `TICKET_CREATOR_H5_BASE_URL` | ❌ | H5 确认页 Base（默认回退用 `TICKET_CREATOR_BASE_URL`） |
+
+---
+
+### 4.5 ic-rpa-executor — RPA 自动执行
+
+**文件**：[ic-rpa-executor/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-rpa-executor/SKILL.md)  
+**脚本**：[rpa_executor.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-rpa-executor/rpa_executor.py)
+
+**触发方式**：手动触发（管理员执行）
+
+```bash
+python3 skills/ic-rpa-executor/rpa_executor.py {工单ID}
+```
+
+**核心执行步骤**：
+
+#### Step 1：校验工单状态
+- 调用工单查询 API 获取详情
+- 若状态不是 `PENDING`（待提交）则直接中止，不做任何操作
+
+#### Step 2：校验经办人信息
+验证以下字段必须完整：
+
+| 字段 | 说明 |
+|------|------|
+| `agentName` | 经办人姓名 |
+| `agentPhone` | 经办人手机号 |
+| `idCardFrontUrl` | 身份证正面照片 URL |
+| `idCardBackUrl` | 身份证反面照片 URL |
+
+> 缺失时推送微信群告警，中止执行。
+
+#### Step 3：扫码登录检测（含防护逻辑）
+
+```
+for attempt in 1..5:
+    if check_login():          # 先检查是否已登录
+        break
+    获取二维码（超时 120s）
+    if 二维码获取失败:
+        等待 10s → 重试（不发消息）
+    else:
+        推送二维码 + 文字到微信群
+        for check_round in 1..12:     # 每 5s 轮询，最长 60s
+            sleep(5)
+            if check_login():
+                break
+if 超时:
+    if 期间曾发过二维码: 推送超时通知到群聊
+    else: 仅记录日志，不打扰客户
+```
+
+#### Step 4：RPA 事项执行
+
+| itemName | 处理方式 |
+|----------|----------|
+| `CAPITAL` | 调用 RPA 减资接口 `POST /api/v1/task/capital-reduction/start` |
+| `EQUITY` | 跳过（预留，推送人工跟进提示） |
+| `PERIOD` | 跳过（暂无接口，推送人工跟进提示） |
+
+#### Step 5：工单状态流转
+- 所有支持事项成功启动后，调用 transit API 将状态由 `PENDING` → `PROCESSING`
+- 发送完成通知到微信群
+
+#### 依赖环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `TICKET_CREATOR_BASE_URL` | 工单系统 API Base |
+| `TICKET_CREATOR_OPEN_TOKEN` | 工单系统鉴权 Token |
+| `RPA_BASE_URL` | RPA 服务地址，如 `http://61.169.217.122:8088` |
+| `RPA_API_KEY` | RPA 服务 API Key（`X-API-Key` 请求头） |
+| `GATEWAY_URL` | 消息网关地址，如 `http://8.130.75.243:8081` |
+| `GATEWAY_API_TOKEN` | 网关 Bearer Token |
+| `RPA_CALLBACK_URL` | RPA 完成回调地址（可选，默认 dummy） |
+
+---
+
+### 4.6 oss-uploader — 文件上传
+
+**文件**：[oss-uploader/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/oss-uploader/SKILL.md)  
+**脚本**：[upload_tool.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/oss-uploader/upload_tool.py)
+
+**职责**：将本地文件或远程 URL 文件同步上传至阿里云 OSS。
+
+**上传规则**：
+- 目标路径：`openclaw/YYYYMMDD/{filename}`
+- Bucket：`aiqifu`
+- Endpoint：`oss-cn-beijing.aliyuncs.com`
+
+**依赖环境变量**：
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `OSS_AK_ID` | ✅ | 阿里云 AccessKey ID |
+| `OSS_AK_SECRET` | ✅ | 阿里云 AccessKey Secret |
+| `OSS_ENDPOINT` | ❌ | 默认 `oss-cn-beijing.aliyuncs.com` |
+| `OSS_BUCKET` | ❌ | 默认 `aiqifu` |
+
+---
+
+## 5. 工单状态机
+
+```
+CONFIRM_BY_C       （待客户确认 — ticket-creator 创建后默认状态）
+      │
+      │ 客户在 H5 页面点击确认
+      ▼
+   CONFIRMED        （已人工确认）
+      │
+      │ 管理员操作 / 系统流转
+      ▼
+   PENDING          （待提交 — ic-rpa-executor 的触发条件）
+      │
+      │ ic-rpa-executor 执行成功
+      ▼
+  PROCESSING        （办理中 — RPA 已提交）
+      │
+      │ 后续人工归档
+      ▼
+    DONE            （已办结）
+```
+
+> [!IMPORTANT]
+> `ic-rpa-executor` 仅处理 `PENDING` 状态的工单。若状态为其他值，脚本将立即中止（无副作用）。
+
+---
+
+## 6. 环境变量配置
+
+项目使用 `.env` 文件集中管理（路径：`skills/.env`）。
+
+```ini
+# ────────── OSS 文件存储 ──────────
+OSS_AK_ID=...
+OSS_AK_SECRET=...
+OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
+OSS_BUCKET=aiqifu
+
+# ────────── 企信查 API（企业信息核验） ──────────
+QYXQK_APP_ID=...
+QYXQK_SECRET=...
+QYXQK_FUZZY_QUERY_API=https://gateway.qyxqk.com/wdyl/openapi/fuzzy_query/
+QYXQK_SHAREHOLDER_API=https://gateway.qyxqk.com/wdyl/openapi/company_stockholder_query/
+
+# ────────── DashScope（OCR 证件识别） ──────────
+DASHSCOPE_API_KEY=...
+DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
+DASHSCOPE_VISION_MODEL=qwen-vl-max
+
+# ────────── 工单系统 ──────────
+TICKET_CREATOR_BASE_URL=http://139.196.78.56:8081/jeecg-boot
+TICKET_CREATOR_OPEN_TOKEN=...
+TICKET_CREATOR_H5_BASE_URL=http://139.196.78.56:8000   # 可选，默认回退用 BASE_URL
+
+# ────────── RPA 服务 ──────────
+RPA_BASE_URL=http://61.169.217.122:8088
+RPA_API_KEY=...
+RPA_CALLBACK_URL=                                       # 可选
+
+# ────────── 消息网关（微信群推送） ──────────
+GATEWAY_URL=http://8.130.75.243:8081
+GATEWAY_API_TOKEN=...
+OPENCLAW_GATEWAY_TOKEN=...                              # OpenClaw 平台内置 Token
+```
+
+---
+
+## 7. 服务依赖关系
+
+```mermaid
+graph LR
+    Skills["AI Skills\n(OpenClaw)"]
+
+    Skills -->|REST OpenAPI| BizOrder["JeecgBoot 工单系统\n139.196.78.56:8081"]
+    Skills -->|REST| RPA["RPA 服务\n61.169.217.122:8088"]
+    Skills -->|REST| Gateway["消息网关\n8.130.75.243:8081"]
+    Skills -->|SDK| OSS["阿里云 OSS\noss-cn-beijing"]
+    Skills -->|REST| QYXQK["企信查 API\ngateway.qyxqk.com"]
+    Skills -->|REST| DashScope["阿里云 DashScope\n(视觉 OCR)"]
+
+    Gateway -->|推送| WeChat["微信企业群"]
+    RPA -->|浏览器自动化| GovPortal["一网通办政府平台\nzwdt.sh.gov.cn"]
+    BizOrder -->|H5 确认页| Client["客户浏览器"]
+```
+
+---
+
+## 8. 数据结构参考
+
+### 8.1 工单主表 `workOrder` 字段
+
+| 字段 | 必填 | 类型 | 说明 |
+|------|------|------|------|
+| `enterpriseName` | ✅ | string | 企业名称 |
+| `creditCode` | ✅ | string | 统一社会信用代码（18位） |
+| `matterType` | ✅ | enum | `CHANGE` / `SETUP` / `CANCEL` 等 |
+| `objectType` | ❌ | enum | `ENTERPRISE`（默认）/ `INDIVIDUAL` / `COOP` 等 |
+| `orderType` | ❌ | enum | `BIZ_CHANGE`（默认）/ `BIZ_SETUP` / `BIZ_CANCEL` |
+| `orderStatus` | ❌ | enum | 初始默认 `CONFIRM_BY_C` |
+| `wechatMappingKey` | ❌ | string | 微信消息路由键（由 `sessionKey` 自动注入） |
+
+### 8.2 事项明细 `itemList[]` 字段
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `itemName` | ✅ | 事项代码：`NAME` / `LEGAL` / `CAPITAL` / `SCOPE` / `ADDR` / `PERIOD` / `EQUITY` |
+| `beforeChange` | ✅ | 变更前 JSON（结构因 itemName 而异） |
+| `afterChange` | ✅ | 变更后 JSON（结构因 itemName 而异） |
+
+### 8.3 各事项 JSON 结构
+
+| itemName | JSON 结构示例 |
+|----------|-------------|
+| `NAME` / `LEGAL` | `{"name": "张三"}` |
+| `SCOPE` | `{"scope": "计算机软件开发；技术咨询。"}` |
+| `ADDR` | `{"address": "上海市浦东新区..."}` |
+| `PERIOD` | `{"type": "fixed", "date": "2035-12-31"}` 或 `{"type": "forever"}` |
+| `CAPITAL` | `{"amount": 5000000, "currency": "CNY", "shareholders": [...]}` |
+| `EQUITY` | `{"shareholders": [{"name":"王五","amount":2550000,"ratio":0.51,"certType":"ID_CARD","certNumber":"...","certFrontUrl":"...","certBackUrl":"..."}]}` |
+
+### 8.4 经办人 `agent` 字段（工单系统内）
+
+| 字段 | 说明 |
+|------|------|
+| `agentName` | 经办人姓名 |
+| `agentPhone` | 手机号 |
+| `agentIdCard` | 身份证号（可选） |
+| `idCardFrontUrl` | 身份证正面 OSS URL |
+| `idCardBackUrl` | 身份证反面 OSS URL |
+
+> [!NOTE]
+> 经办人信息由后台管理端手动录入并关联至工单，开放接口不支持写入经办人数据。
+
+---
+
+## 9. 错误处理与安全机制
+
+### 微信消息发送策略
+
+| 场景 | 行为 |
+|------|------|
+| 二维码生成失败 | **不发送**任何微信消息，仅写日志，等待 10s 后重试 |
+| 所有二维码尝试均失败 | 静默退出，仅写日志，不打扰客户 |
+| 成功发过二维码但最终超时 | 发送超时告警（❌）到群聊 |
+| 经办人信息缺失 | 发送告警（❌）到管理员群，指明缺失字段 |
+| 部分事项不支持 RPA | 发送警告（⚠️）到群聊，提示人工跟进 |
+| RPA 触发全部失败 | 返回失败 JSON，不更改工单状态 |
+
+### 工单状态幂等保护
+
+- `ic-rpa-executor` 每次执行前强制校验状态必须为 `PENDING`
+- 非 `PENDING` 状态直接返回成功退出（防止重复触发）
+
+### Token 与鉴权
+
+- 工单系统使用静态 `X-Open-Token` Header 鉴权
+- RPA 服务使用 `X-API-Key` Header 鉴权
+- Gateway 使用 `Bearer` Token 鉴权
+- 所有 Token 均存储在 `.env` 文件，不硬编码在源码中
+
+> [!CAUTION]
+> `.env` 文件包含所有生产环境敏感凭证，请确保其已在 `.gitignore` 中排除，不得提交至代码仓库。
+
+---
+
+## 10. 文件目录树
+
+```
+skills/
+├── .env                              # 环境变量（所有服务凭证）
+│
+├── ic-portal-assistant/
+│   └── SKILL.md                      # 入口路由 Skill 定义
+│
+├── ic-change-assistant/
+│   ├── SKILL.md                      # 股权/期限变更 Skill 定义
+│   ├── unified_query.py              # 企业信息查询（企信查 API）
+│   └── validate_document.py          # 证件 OCR 识别（DashScope）
+│
+├── ic-reduction-assistant/
+│   ├── SKILL.md                      # 减资 Skill 定义
+│   └── unified_query.py              # 企业信息查询（复用）
+│
+├── ticket-creator/
+│   ├── SKILL.md                      # 工单创建 Skill 定义
+│   ├── ticket_creator.py             # 工单创建脚本（数据归一化 + API 提交）
+│   └── 工商变更工单API.md             # JeecgBoot 开放接口参考文档 v2.1
+│
+├── ic-rpa-executor/
+│   ├── SKILL.md                      # RPA 执行 Skill 定义
+│   └── rpa_executor.py               # RPA 自动化执行主脚本
+│
+└── oss-uploader/
+    ├── SKILL.md                      # OSS 上传 Skill 定义
+    └── upload_tool.py                # 文件上传工具
+```
