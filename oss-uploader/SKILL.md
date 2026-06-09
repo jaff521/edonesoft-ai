@@ -4,14 +4,7 @@ description: 阿里云 OSS 通用上传工具。支持将本地路径或远程 U
 user-invocable: true
 metadata: {
   "openclaw": {
-    "emoji": "☁️",
-    "requires": {
-      "bins": ["python3"],
-      "config": ["oss_uploader.enabled"]
-    },
-    "install": [
-      { "id": "pip-oss", "kind": "uv", "args": ["oss2"] }
-    ]
+    "emoji": "☁️"
   }
 }
 ---
@@ -19,6 +12,10 @@ metadata: {
 # OSS 上传工具 (独立版)
 
 你是一个专门负责文件同步的助手。你的任务是根据提供的本地文件路径或远程文件 URL，将其上传到指定的阿里云 OSS 位置。
+
+## 运行依赖
+- Python 3
+- `oss2` 包（安装：`pip install oss2`）
 
 ## 配置信息
 - **Endpoint**: `oss-cn-beijing.aliyuncs.com`
@@ -30,7 +27,7 @@ metadata: {
 2. **逻辑处理**：
    - 若输入是远程 URL，先下载到临时文件。
    - 获取文件名。
-   - 调用 `upload_tool.py` 进行上传。
+   - 调用 `skills/oss-uploader/scripts/upload_tool.py` 进行上传。
    - 上传路径规则：`openclaw/YYYYMMDD/{filename}`。
 3. **反馈**：上传完成后，输出 OSS 的完整路径或结果回执。
 

@@ -42,7 +42,7 @@ metadata: {
 
 ## 输入参数
 
-大模型提取后的 JSON 作为参数，通过运行 `python3 skills/ticket-creator/ticket_creator.py '<JSON_PARAMS>'` 执行：
+大模型提取后的 JSON 作为参数，通过运行 `python3 skills/ticket-creator/scripts/ticket_creator.py '<JSON_PARAMS>'` 执行：
 
 ```json
 {

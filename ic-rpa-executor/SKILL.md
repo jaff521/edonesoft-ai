@@ -33,5 +33,5 @@ metadata: {
 在开发测试阶段，采用手动调用的方式：
 
 ```bash
-python3 skills/ic-rpa-executor/rpa_executor.py {工单ID}
+python3 skills/ic-rpa-executor/scripts/rpa_executor.py {工单ID}
 ```
