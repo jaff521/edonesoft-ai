@@ -138,6 +138,29 @@ def normalize_name_change(change: Dict[str, Any]) -> Dict[str, Any]:
     return {"name": raw_value} if raw_value not in (None, "") else {}
 
 
+def normalize_legal_change(change: Dict[str, Any], is_after: bool = False) -> Dict[str, Any]:
+    """法定代表人 LEGAL 事项归一化。
+    beforeChange：仅保留 name。
+    afterChange：name 必填，额外透传 phone / idCardFrontUrl / idCardBackUrl（均可选）。
+    """
+    name = change.get("name")
+    if not name:
+        raw_value = first_non_empty_value(change)
+        name = raw_value if raw_value not in (None, "") else None
+
+    result: Dict[str, Any] = {}
+    if name:
+        result["name"] = name
+
+    if is_after:
+        for field in ("phone", "idCardFrontUrl", "idCardBackUrl"):
+            val = change.get(field)
+            if val not in (None, ""):
+                result[field] = val
+
+    return result
+
+
 def normalize_text_change(change: Dict[str, Any], field_name: str) -> Dict[str, Any]:
     if field_name in change and change[field_name]:
         return {field_name: change[field_name]}
@@ -269,14 +292,14 @@ def normalize_capital_change(change: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def normalize_change_payload(item_name: str, change: Any) -> Any:
+def normalize_change_payload(item_name: str, change: Any, is_after: bool = False) -> Any:
     if not isinstance(change, dict):
         return change
 
     if item_name == "NAME":
         return normalize_name_change(change)
     if item_name == "LEGAL":
-        return normalize_name_change(change)
+        return normalize_legal_change(change, is_after=is_after)
     if item_name == "SCOPE":
         return normalize_text_change(change, "scope")
     if item_name == "ADDR":
@@ -335,8 +358,8 @@ def normalize_items(item_list: Any) -> Any:
         item_name = normalize_enum(item.get("itemName"), ITEM_NAME_ALIASES, "")
         clean_item = {
             "itemName": item_name,
-            "beforeChange": normalize_change_payload(item_name, item.get("beforeChange")),
-            "afterChange": normalize_change_payload(item_name, item.get("afterChange")),
+            "beforeChange": normalize_change_payload(item_name, item.get("beforeChange"), is_after=False),
+            "afterChange": normalize_change_payload(item_name, item.get("afterChange"), is_after=True),
         }
         clean_items.append(clean_item)
 

@@ -141,7 +141,11 @@ metadata: {
 - `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "shareholders": [{"name": "张三", "amount": 2500000, "ratio": 0.50}]}`
 - `SCOPE`：`{"scope": "经营范围全文"}`
 - `ADDR`：`{"address": "完整经营地址"}`
-- `NAME` / `LEGAL`：`{"name": "名称或姓名"}`
+- `NAME`：`{"name": "企业名称"}`
+- `LEGAL`（⚠️ 注意 before / after 结构不同）：
+  - `beforeChange`（原法人，仅姓名）：`{"name": "张三"}`
+  - `afterChange`（新法人）：`{"name": "李四", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}`
+  - `phone`、`idCardFrontUrl`、`idCardBackUrl` 在法定代表人变更场景为**业务必填字段**，须由上层 Skill（ic-legal-assistant）在建单前收集完毕
 - `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
 - `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://..."}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）
 

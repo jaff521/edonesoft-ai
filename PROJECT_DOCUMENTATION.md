@@ -1,8 +1,8 @@
 # AI Workers — 工商变更自动化平台 项目文档
 
 > **项目路径**：`/Users/suf1234/code-spaces/edonesoft/ai-workers/skills`
-> **文档版本**：v1.0  
-> **更新日期**：2026-06-07
+> **文档版本**：v1.1  
+> **更新日期**：2026-06-09
 
 ---
 
@@ -15,9 +15,10 @@
    - 4.1 [ic-portal-assistant — 入口路由](#41-ic-portal-assistant--入口路由)
    - 4.2 [ic-change-assistant — 变更信息收集](#42-ic-change-assistant--变更信息收集)
    - 4.3 [ic-reduction-assistant — 减资助手](#43-ic-reduction-assistant--减资助手)
-   - 4.4 [ticket-creator — 工单创建](#44-ticket-creator--工单创建)
-   - 4.5 [ic-rpa-executor — RPA 自动执行](#45-ic-rpa-executor--rpa-自动执行)
-   - 4.6 [oss-uploader — 文件上传](#46-oss-uploader--文件上传)
+   - 4.4 [ic-legal-assistant — 法定代表人变更助手](#44-ic-legal-assistant--法定代表人变更助手)
+   - 4.5 [ticket-creator — 工单创建](#45-ticket-creator--工单创建)
+   - 4.6 [ic-rpa-executor — RPA 自动执行](#46-ic-rpa-executor--rpa-自动执行)
+   - 4.7 [oss-uploader — 文件上传](#47-oss-uploader--文件上传)
 5. [工单状态机](#5-工单状态机)
 6. [环境变量配置](#6-环境变量配置)
 7. [服务依赖关系](#7-服务依赖关系)
@@ -55,25 +56,6 @@
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
-┌─────────────────────────────────────────────────────┐
-│              ic-portal-assistant（入口 Skill）        │
-│  展示业务菜单，按客户选择路由到子 Skill              │
-└───────────────┬──────────────┬──────────────────────┘
-                │              │
-       ┌────────┘              └───────────┐
-       ▼                                   ▼
-┌──────────────────────┐     ┌─────────────────────────┐
-│  ic-change-assistant │     │  ic-reduction-assistant │
-│  股权变更 / 期限变更 │     │  注册资本减少（减资）   │
-└──────────┬───────────┘     └────────────┬────────────┘
-           │                              │
-           └──────────────┬───────────────┘
-                          ▼
-           ┌──────────────────────────────┐
-           │      ticket-creator Skill    │
-           │  归一化数据 → 创建工单       │
-           │  返回 ticket_id + confirm_url│
-           └──────────────┬───────────────┘
                           │
                           ▼
            ┌──────────────────────────────┐
@@ -147,8 +129,9 @@ flowchart TD
 | 2 | 股权变更 | `ic-change-assistant` | `selectedMatters: ["EQUITY"]` |
 | 1+2 | 期限 + 股权（组合） | `ic-change-assistant` | `selectedMatters: ["PERIOD", "EQUITY"]` |
 | 3 | 注册资本减少 | `ic-reduction-assistant` | — |
+| 4 | 法定代表人变更 | `ic-legal-assistant` | — |
 
-**异常处理**：超出支持范围的变更类型（如设立、注销、经营范围）礼貌告知并引导人工客服。
+**异常处理**：超出支持范围的变更类型（如设立、注销、经营范围）礼貌告知并引导人工客服，提示：“抱歉，我目前仅支持办理 1.经营期限变更、2.股权变更、3.注册资本减少、4.法定代表人变更。其他变更项正在建设中，请联系人工客服办理。”
 
 ---
 
@@ -212,7 +195,33 @@ Step 7: 回复 confirm_url 链接供客户点击确认
 
 ---
 
-### 4.4 ticket-creator — 工单创建
+### 4.4 ic-legal-assistant — 法定代表人变更助手
+
+**文件**：[ic-legal-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-legal-assistant/SKILL.md)
+
+**脚本**：
+- [unified_query.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-legal-assistant/unified_query.py) — 企业信息查询（企信查 API）
+- [validate_document.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-legal-assistant/validate_document.py) — 证件 OCR 识别（DashScope 视觉模型）
+
+**职责**：处理法定代表人变更业务。引导客户提供原/新法人信息、新法人手机号，以及新法人身份证正反面照片。
+
+**核心流程**：
+- 步骤 1：企业名称核验（企信查核实统一信用代码及现任法人）。
+- 步骤 2：收集新法人姓名、手机号，引导上传身份证正反面照片并调用 `validate_document.py` 进行 OCR 核实与有效期校验。
+- 步骤 3：向客户展示变更前/后摘要（包含手机号及身份证上传状态），等待客户确认。
+- 步骤 4：调用 `ticket-creator` 创建工单，将新法人身份证图片上传 OSS 后的 URL 填入 `idCardFrontUrl` / `idCardBackUrl`，新法人手机号填入 `phone`，原法人姓名填入 `beforeChange`。
+
+**成功回复规范**：
+```
+✅ 法定代表人变更工单已创建，工单号：`{ticket_id}`，相关材料已归档。
+
+👉 请点击以下链接进入工单页面，完成人工确认操作：
+{confirm_url}
+```
+
+---
+
+### 4.5 ticket-creator — 工单创建
 
 **文件**：[ticket-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ticket-creator/SKILL.md)  
 **脚本**：[ticket_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ticket-creator/ticket_creator.py)  
@@ -278,7 +287,7 @@ Step 7: 回复 confirm_url 链接供客户点击确认
 
 ---
 
-### 4.5 ic-rpa-executor — RPA 自动执行
+### 4.6 ic-rpa-executor — RPA 自动执行
 
 **文件**：[ic-rpa-executor/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-rpa-executor/SKILL.md)  
 **脚本**：[rpa_executor.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-rpa-executor/rpa_executor.py)
@@ -353,7 +362,7 @@ if 超时:
 
 ---
 
-### 4.6 oss-uploader — 文件上传
+### 4.7 oss-uploader — 文件上传
 
 **文件**：[oss-uploader/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/oss-uploader/SKILL.md)  
 **脚本**：[upload_tool.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/oss-uploader/upload_tool.py)
@@ -381,19 +390,19 @@ if 超时:
 ```
 CONFIRM_BY_C       （待客户确认 — ticket-creator 创建后默认状态）
       │
-      │ 客户在 H5 页面点击确认
+      │ 客户在 H5 页面点击确认 (confirmByCustomer)
       ▼
-   CONFIRMED        （已人工确认）
+CONFIRM_BY_A       （待经办人确认 — 等待后台经办人关联并确认）
       │
-      │ 管理员操作 / 系统流转
+      │ 经办人确认 (confirmByAgent)
       ▼
    PENDING          （待提交 — ic-rpa-executor 的触发条件）
       │
       │ ic-rpa-executor 执行成功
       ▼
-  PROCESSING        （办理中 — RPA 已提交）
+  PROCESSING        （办理中 — RPA 已提交并处于流程流转中）
       │
-      │ 后续人工归档
+      │ 后续人工办理及归档
       ▼
     DONE            （已办结）
 ```
@@ -489,7 +498,8 @@ graph LR
 
 | itemName | JSON 结构示例 |
 |----------|-------------|
-| `NAME` / `LEGAL` | `{"name": "张三"}` |
+| `NAME` | `{"name": "上海星辰贸易有限公司"}` |
+| `LEGAL` | beforeChange: `{"name": "张三"}`<br>afterChange: `{"name": "李四", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}` |
 | `SCOPE` | `{"scope": "计算机软件开发；技术咨询。"}` |
 | `ADDR` | `{"address": "上海市浦东新区..."}` |
 | `PERIOD` | `{"type": "fixed", "date": "2035-12-31"}` 或 `{"type": "forever"}` |
@@ -559,10 +569,15 @@ skills/
 │   ├── SKILL.md                      # 减资 Skill 定义
 │   └── unified_query.py              # 企业信息查询（复用）
 │
+├── ic-legal-assistant/
+│   ├── SKILL.md                      # 法定代表人变更 Skill 定义
+│   ├── unified_query.py              # 企业信息查询（复用）
+│   └── validate_document.py          # 证件 OCR 识别（复用）
+│
 ├── ticket-creator/
 │   ├── SKILL.md                      # 工单创建 Skill 定义
 │   ├── ticket_creator.py             # 工单创建脚本（数据归一化 + API 提交）
-│   └── 工商变更工单API.md             # JeecgBoot 开放接口参考文档 v2.1
+│   └── 工商变更工单API.md             # JeecgBoot 开放接口参考文档 v2.3
 │
 ├── ic-rpa-executor/
 │   ├── SKILL.md                      # RPA 执行 Skill 定义

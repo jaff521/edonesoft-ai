@@ -1,7 +1,7 @@
 # 工商变更工单模块 — 外部系统对接参考文档
 
-> **文档版本**：v2.1  
-> **更新日期**：2026-05-26  
+> **文档版本**：v2.3  
+> **更新日期**：2026-06-08  
 > **适用模块**：工单管理（前端路由 `/bizorder/workOrder`）  
 > **数据来源**：数据库字典（`sys_dict` / `sys_dict_item`）、后端实体与开放接口、前端事项 JSON 表单组件
 
@@ -14,7 +14,7 @@
 - **工单主表**（`biz_work_order`）：企业基本信息、类型、状态、客户确认标记等
 - **事项明细表**（`biz_order_item`）：变更登记事项及变更前/后 JSON 数据
 
-> 经办人由后台管理端创建并关联，开放接口 **不涉及** 经办人数据的读写。
+> 经办人（`biz_agent` 表）由后台管理端创建和管理；工单通过 `agentId` 字段关联经办人，开放接口可传入 `agentId` 完成关联。
 
 外部系统通过 **开放接口**（静态 Token 鉴权）进行读写，接口路径前缀为 `/bizorder/openapi/workOrder/**`，与内部管理端接口（需登录 + 权限）相互独立。
 
@@ -22,13 +22,13 @@
 
 ## 2. 鉴权方式
 
-| 项目       | 说明                                                        |
-| ---------- | ----------------------------------------------------------- |
-| 鉴权类型   | 静态 Token（请求头校验）                                    |
-| 请求头名称 | `X-Open-Token`                                              |
-| 配置项     | 服务端 `bizorder.openapi.enabled`、`bizorder.openapi.token` |
-| 生效范围   | 仅 `/bizorder/openapi/*`                                    |
-| Token 获取 | 由本系统运维/对接方线下分配，**请勿写入客户端代码仓库**     |
+| 项目 | 说明 |
+|------|------|
+| 鉴权类型 | 静态 Token（请求头校验） |
+| 请求头名称 | `X-Open-Token` |
+| 配置项 | 服务端 `bizorder.openapi.enabled`、`bizorder.openapi.token` |
+| 生效范围 | 仅 `/bizorder/openapi/*` |
+| Token 获取 | 由本系统运维/对接方线下分配，**请勿写入客户端代码仓库** |
 
 ### 2.1 错误响应
 
@@ -44,22 +44,22 @@
 }
 ```
 
-| code | 含义               |
-| ---- | ------------------ |
-| 401  | Token 缺失或不匹配 |
-| 500  | 服务端未配置 token |
-| 503  | 开放接口未启用     |
+| code | 含义 |
+|------|------|
+| 401 | Token 缺失或不匹配 |
+| 500 | 服务端未配置 token |
+| 503 | 开放接口未启用 |
 
 ---
 
 ## 3. 接口基础信息
 
-| 项目              | 值                                             |
-| ----------------- | ---------------------------------------------- |
-| 默认 Context Path | `/jeecg-boot`                                  |
+| 项目 | 值 |
+|------|-----|
+| 默认 Context Path | `/jeecg-boot` |
 | 开放接口 Base URL | `{host}/jeecg-boot/bizorder/openapi/workOrder` |
-| Content-Type      | `application/json`（POST/PUT 请求体）          |
-| 字符编码          | UTF-8                                          |
+| Content-Type | `application/json`（POST/PUT 请求体） |
+| 字符编码 | UTF-8 |
 
 > 生产环境 host、context-path 以实际部署为准。
 
@@ -67,24 +67,24 @@
 
 ## 4. 开放接口清单
 
-| 方法 | 路径                                     | 说明                                |
-| ---- | ---------------------------------------- | ----------------------------------- |
-| GET  | `/list`                                  | 分页列表（含事项明细）              |
-| GET  | `/queryById?id={id}`                     | 聚合详情（主单 + 事项）             |
-| POST | `/add`                                   | 新增工单（聚合写入）                |
-| PUT  | `/edit`                                  | 编辑工单（主单更新 + 子表全量替换） |
-| POST | `/transit?id={id}&targetStatus={status}` | 状态流转（受状态机约束）            |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/list` | 分页列表（含事项明细） |
+| GET | `/queryById?id={id}` | 聚合详情（主单 + 事项） |
+| POST | `/add` | 新增工单（聚合写入） |
+| PUT | `/edit` | 编辑工单（主单更新 + 子表全量替换） |
+| POST | `/transit?id={id}&targetStatus={status}` | 状态流转（受状态机约束） |
 
 ### 4.1 列表查询参数
 
-| 参数           | 类型   | 必填 | 说明                                          |
-| -------------- | ------ | ---- | --------------------------------------------- |
-| pageNo         | int    | 否   | 页码，默认 1                                  |
-| pageSize       | int    | 否   | 每页条数，默认 10                             |
-| orderNo        | string | 否   | 工单编号（精确/模糊，按 QueryGenerator 规则） |
-| enterpriseName | string | 否   | 企业名称                                      |
-| orderStatus    | string | 否   | 工单状态字典值，如 `PENDING`                  |
-| objectType     | string | 否   | 对象类型字典值，如 `ENTERPRISE`               |
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| pageNo | int | 否 | 页码，默认 1 |
+| pageSize | int | 否 | 每页条数，默认 10 |
+| orderNo | string | 否 | 工单编号（精确/模糊，按 QueryGenerator 规则） |
+| enterpriseName | string | 否 | 企业名称 |
+| orderStatus | string | 否 | 工单状态字典值，如 `PENDING` |
+| objectType | string | 否 | 对象类型字典值，如 `ENTERPRISE` |
 
 ### 4.2 统一成功响应格式
 
@@ -119,19 +119,21 @@
 
 ### 5.2 工单主表 workOrder（biz_work_order）
 
-| 字段             | 类型     | 必填     | 说明                                                         |
-| ---------------- | -------- | -------- | ------------------------------------------------------------ |
-| id               | string   | 编辑必填 | 主键，新增可不传（系统自动生成）                             |
-| orderNo          | string   | 否       | 工单编号；留空自动生成，规则见 5.4                           |
-| objectType       | string   | 否       | 对象类型，字典 `biz_object_type`，默认 `ENTERPRISE`          |
-| matterType       | string   | 否       | 事项类型，字典 `biz_matter_type`，默认 `CHANGE`              |
-| orderType        | string   | 否       | 工单类型，字典 `biz_order_type`，默认 `BIZ_CHANGE`           |
-| orderStatus      | string   | 否       | 工单状态，字典 `biz_order_status`，新增默认 `CONFIRM_BY_C`（待客户确认） |
-| enterpriseName   | string   | **是**   | 企业名称 / 对象名称                                          |
-| creditCode       | string   | 否       | 18 位统一社会信用代码                                        |
-| wechatMappingKey | string   | 否       | 微信路由唯一凭证 Key，格式 `{robot_wxid}:{chat_type}:{target_wxid}`；仅微信群聊渠道发起的工单有此值，后台手动创建的工单为 `null` |
-| createTime       | datetime | —        | 创建时间，格式 `yyyy-MM-dd HH:mm:ss`                         |
-| updateTime       | datetime | —        | 更新时间                                                     |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | string | 编辑必填 | 主键，新增可不传（系统自动生成） |
+| orderNo | string | 否 | 工单编号；留空自动生成，规则见 5.4 |
+| objectType | string | 否 | 对象类型，字典 `biz_object_type`，默认 `ENTERPRISE` |
+| matterType | string | 否 | 事项类型，字典 `biz_matter_type`，默认 `CHANGE` |
+| orderType | string | 否 | 工单类型，字典 `biz_order_type`，默认 `BIZ_CHANGE` |
+| orderStatus | string | 否 | 工单状态，字典 `biz_order_status`，新增默认 `CONFIRM_BY_C`（待客户确认） |
+| enterpriseName | string | **是** | 企业名称 / 对象名称 |
+| creditCode | string | 否 | 18 位统一社会信用代码 |
+| agentId | string | 否 | 经办人 ID，关联 `biz_agent` 表 |
+| currentSessionId | string | 否 | 当前办理会话 ID（RPA 标记） |
+| wechatMappingKey | string | 否 | 微信路由唯一凭证 Key，格式 `{robot_wxid}:{chat_type}:{target_wxid}`；仅微信群聊渠道发起的工单有此值，后台手动创建的工单为 `null` |
+| createTime | datetime | — | 创建时间，格式 `yyyy-MM-dd HH:mm:ss` |
+| updateTime | datetime | — | 更新时间 |
 
 **字典翻译字段**（仅查询响应可能出现）：`objectType_dictText`、`matterType_dictText`、`orderType_dictText`、`orderStatus_dictText`
 
@@ -144,13 +146,13 @@
 
 ### 5.5 事项明细 itemList（biz_order_item）
 
-| 字段         | 类型          | 必填   | 说明                                             |
-| ------------ | ------------- | ------ | ------------------------------------------------ |
-| id           | string        | 否     | 主键；编辑时子表会先删后插                       |
-| orderId      | string        | —      | 工单 ID，服务端自动填充                          |
-| itemName     | string        | **是** | 事项名称，字典 `biz_item_name` 的 **item_value** |
-| beforeChange | object / null | 否     | 变更前 JSON 对象                                 |
-| afterChange  | object / null | 否     | 变更后 JSON 对象                                 |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | string | 否 | 主键；编辑时子表会先删后插 |
+| orderId | string | — | 工单 ID，服务端自动填充 |
+| itemName | string | **是** | 事项名称，字典 `biz_item_name` 的 **item_value** |
+| beforeChange | object / null | 否 | 变更前 JSON 对象 |
+| afterChange | object / null | 否 | 变更后 JSON 对象 |
 
 > **重要**：`beforeChange`、`afterChange` 在 API 中为 **JSON 对象**，不是字符串。空数据请传 `null`，不要传 `{}` 或全空占位对象。
 
@@ -165,80 +167,78 @@
 
 后端枚举类：`OrderStatusEnum`（与字典值一致）
 
-| item_text（中文） | item_value（代码） | 说明                                     |
-| ----------------- | ------------------ | ---------------------------------------- |
-| 待客户确认        | CONFIRM_BY_C       | 开放接口新增默认状态，等待客户在 H5 确认 |
-| 待经办人确认      | CONFIRM_BY_A       | 客户确认后进入，等待后台经办人确认       |
-| 待填报            | PENDING            | 经办人确认后进入                         |
-| 暂存              | DRAFT              | 草稿                                     |
-| 材料已保存        | SAVED              | 材料已保存                               |
-| 材料已人工确认    | CONFIRMED          | 人工确认完成                             |
-| 办理中            | PROCESSING         | 正在办理                                 |
-| 已办结            | DONE               | 终态                                     |
+| item_text（中文） | item_value（代码） | 说明 |
+|-------------------|-------------------|------|
+| 待客户确认 | CONFIRM_BY_C | 开放接口新增默认状态，等待客户在 H5 确认 |
+| 待经办人确认 | CONFIRM_BY_A | 客户确认后进入，等待后台经办人确认 |
+| 待提交 | PENDING | 经办人确认后进入，等待填报 |
+| 暂存 | DRAFT | 草稿 |
+| 取消/终止办理 | CANCEL | 终止该工单，不可再流转 |
+| 办理中 | PROCESSING | 正在办理 |
+| 已办结 | DONE | 终态 |
 
 ### 6.2 工单状态流转规则
 
 仅允许以下流转（调用 `/transit` 接口）：
 
 ```
-CONFIRM_BY_C → CONFIRM_BY_A   （客户 H5 确认，自动流转）
-CONFIRM_BY_A → PENDING        （后台经办人确认）
-PENDING      → DRAFT, SAVED
-DRAFT        → SAVED, DRAFT
-SAVED        → CONFIRMED, DRAFT
-CONFIRMED    → PROCESSING
+CONFIRM_BY_C → CONFIRM_BY_A          （客户 H5 确认）
+CONFIRM_BY_A → PENDING               （后台经办人确认）
+PENDING      → DRAFT, CANCEL
+DRAFT        → PROCESSING, CANCEL, DRAFT
+CANCEL       → （不可再流转）
 PROCESSING   → DONE
 DONE         → （不可再流转）
 ```
 
-> `CONFIRM_BY_C → CONFIRM_BY_A` 由 H5 的「确认资料无误」按钮触发（接口 `/bizorder/workOrder/confirmByCustomer`），非 `/transit` 接口。
-> `CONFIRM_BY_A → PENDING` 由后台管理端「经办人确认」按钮触发（接口 `/bizorder/workOrder/confirmByAgent`），非 `/transit` 接口。
+> `CONFIRM_BY_C → CONFIRM_BY_A` 由 H5 的「确认资料无误」按钮触发（接口 `/bizorder/workOrder/confirmByCustomer`，免鉴权），非 `/transit` 接口。
+> `CONFIRM_BY_A → PENDING` 由后台管理端「经办人确认」按钮触发（接口 `/bizorder/workOrder/confirmByAgent`，需权限 `bizorder:workOrder:edit`）。**确认前会校验工单是否已关联经办人，若未关联则需先选择经办人。**
 
 非法流转将返回业务异常，如：`工单状态不允许从 PENDING 流转到 DONE`。
 
 ### 6.3 对象类型 biz_object_type
 
-| item_text                      | item_value     |
-| ------------------------------ | -------------- |
-| 企业                           | ENTERPRISE     |
-| 个体工商户                     | INDIVIDUAL     |
-| 农民专业合作社                 | COOP           |
-| 外国（地区）企业常驻代表机构   | FOREIGN_OFFICE |
-| 外国（地区）企业在中国境内经营 | FOREIGN_BIZ    |
+| item_text | item_value |
+|-----------|------------|
+| 企业 | ENTERPRISE |
+| 个体工商户 | INDIVIDUAL |
+| 农民专业合作社 | COOP |
+| 外国（地区）企业常驻代表机构 | FOREIGN_OFFICE |
+| 外国（地区）企业在中国境内经营 | FOREIGN_BIZ |
 
 ### 6.4 事项类型 biz_matter_type
 
-| item_text    | item_value     |
-| ------------ | -------------- |
-| 设立         | SETUP          |
-| 变更         | CHANGE         |
-| 迁移         | MIGRATE        |
-| 注销         | CANCEL         |
-| 个转企       | IND2ENT        |
-| 跨省迁移     | CROSS_PROVINCE |
-| 名称自主申报 | NAME_DECLARE   |
+| item_text | item_value |
+|-----------|------------|
+| 设立 | SETUP |
+| 变更 | CHANGE |
+| 迁移 | MIGRATE |
+| 注销 | CANCEL |
+| 个转企 | IND2ENT |
+| 跨省迁移 | CROSS_PROVINCE |
+| 名称自主申报 | NAME_DECLARE |
 
 ### 6.5 工单类型 biz_order_type
 
 | item_text | item_value |
-| --------- | ---------- |
-| 工商变更  | BIZ_CHANGE |
-| 工商设立  | BIZ_SETUP  |
-| 工商注销  | BIZ_CANCEL |
+|-----------|------------|
+| 工商变更 | BIZ_CHANGE |
+| 工商设立 | BIZ_SETUP |
+| 工商注销 | BIZ_CANCEL |
 
 ### 6.6 事项名称 biz_item_name
 
 事项名称决定 `beforeChange` / `afterChange` 的 JSON 结构（见第 7 节）。
 
-| item_text  | item_value | JSON 结构类型      |
-| ---------- | ---------- | ------------------ |
-| 企业名称   | NAME       | 单字段 `name`      |
-| 注册资本   | CAPITAL    | 金额 + 币种        |
-| 股权       | EQUITY     | 股东列表           |
-| 经营范围   | SCOPE      | 多行文本 `scope`   |
-| 经营期限   | PERIOD     | 期限类型 + 到期日  |
-| 经营地址   | ADDR       | 多行文本 `address` |
-| 法定代表人 | LEGAL      | 单字段 `name`      |
+| item_text | item_value | JSON 结构类型 |
+|-----------|------------|---------------|
+| 企业名称 | NAME | 单字段 `name` |
+| 注册资本 | CAPITAL | 金额 + 币种 |
+| 股权 | EQUITY | 股东列表 |
+| 经营范围 | SCOPE | 多行文本 `scope` |
+| 经营期限 | PERIOD | 期限类型 + 到期日 |
+| 经营地址 | ADDR | 多行文本 `address` |
+| 法定代表人 | LEGAL | 单字段 `name`（变更后额外含手机号、身份证） |
 
 ---
 
@@ -255,11 +255,13 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段 | 类型   | 说明     |
-| ---- | ------ | -------- |
+| 字段 | 类型 | 说明 |
+|------|------|------|
 | name | string | 企业名称 |
 
 ### 7.2 法定代表人 LEGAL
+
+**变更前（beforeChange）** — 仅姓名：
 
 ```json
 {
@@ -267,9 +269,25 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段 | 类型   | 说明           |
-| ---- | ------ | -------------- |
-| name | string | 法定代表人姓名 |
+**变更后（afterChange）** — 姓名 + 手机号 + 身份证正反面：
+
+```json
+{
+  "name": "李四",
+  "phone": "13800138000",
+  "idCardFrontUrl": "https://example.com/files/legal_idcard_front.jpg",
+  "idCardBackUrl": "https://example.com/files/legal_idcard_back.jpg"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| name | string | **是** | 法定代表人姓名 |
+| phone | string | 否（仅 afterChange） | 新法定代表人手机号 |
+| idCardFrontUrl | string | 否（仅 afterChange） | 新法定代表人身份证正面图片 URL |
+| idCardBackUrl | string | 否（仅 afterChange） | 新法定代表人身份证反面图片 URL |
+
+> **约定**：`beforeChange` 仅保留变更前的姓名。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（新法定代表人信息），均为可选字段——有值则前端展示，无值则不显示。
 
 ### 7.3 注册资本 CAPITAL
 
@@ -292,30 +310,33 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段                  | 类型   | 必填           | 说明                                       |
-| --------------------- | ------ | -------------- | ------------------------------------------ |
-| amount                | number | 是             | 注册资本金额，单位：**元**                 |
-| currency              | string | 否             | 币种代码，默认 `CNY`                       |
-| shareholders          | array  | 否             | 股东出资明细列表                           |
-| shareholders[].name   | string | 是(若有该对象) | 股东姓名 / 企业名称                        |
-| shareholders[].amount | number | 是(若有该对象) | 出资额，单位：**元**                       |
-| shareholders[].ratio  | number | 是(若有该对象) | 出资比例，**0~1 小数**（如 0.50 表示 50%） |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| amount | number | 是 | 注册资本金额，单位：**元** |
+| currency | string | 否 | 币种代码，默认 `CNY` |
+| shareholders | array | 否 | 股东出资明细列表 |
+| shareholders[].name | string | 是(若有该对象) | 股东姓名 / 企业名称 |
+| shareholders[].amount | number | 是(若有该对象) | 出资额，单位：**元** |
+| shareholders[].ratio | number | 是(若有该对象) | 出资比例，**0~1 小数**（如 0.50 表示 50%） |
 
 **约定说明**：
 
+- `shareholders` 数组在 `beforeChange` 和 `afterChange` 中的语义不同：
+  - **beforeChange**：用户手动填写，变更前各位股东的出资额和出资比例
+  - **afterChange**：金额由前端自动根据 `beforeChange.shareholders` 的姓名和比例计算（`afterChange.shareholders[i].amount = afterChange.amount × beforeChange.shareholders[i].ratio`）。**对接方若直接调用 API 写入，需自行计算**
 - 所有股东 `ratio` 之和建议等于 `1`（100%）
 - 前端编辑表单按 **0~1 小数** 存储 `ratio`；展示时乘以 100 显示为百分数
 - 过滤掉 name、amount、ratio 均为空的股东行
 
 **币种代码（前端约定）**：
 
-| 代码 | 含义   |
-| ---- | ------ |
-| CNY  | 人民币 |
-| USD  | 美元   |
-| EUR  | 欧元   |
-| HKD  | 港币   |
-| JPY  | 日元   |
+| 代码 | 含义 |
+|------|------|
+| CNY | 人民币 |
+| USD | 美元 |
+| EUR | 欧元 |
+| HKD | 港币 |
+| JPY | 日元 |
 
 ### 7.4 经营范围 SCOPE
 
@@ -325,8 +346,8 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段  | 类型   | 说明                                 |
-| ----- | ------ | ------------------------------------ |
+| 字段 | 类型 | 说明 |
+|------|------|------|
 | scope | string | 经营范围全文，多条可用顿号或分号分隔 |
 
 ### 7.5 经营地址 ADDR
@@ -337,8 +358,8 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段    | 类型   | 说明         |
-| ------- | ------ | ------------ |
+| 字段 | 类型 | 说明 |
+|------|------|------|
 | address | string | 完整经营地址 |
 
 ### 7.6 经营期限 PERIOD
@@ -358,9 +379,9 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段 | 类型   | 说明                                               |
-| ---- | ------ | -------------------------------------------------- |
-| type | string | `fixed` = 固定期限；`forever` = 长期               |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| type | string | `fixed` = 固定期限；`forever` = 长期 |
 | date | string | 到期日，格式 `YYYY-MM-DD`；`type=forever` 时可省略 |
 
 > 详情展示层还兼容别名：`periodType`、`endDate`、字符串直传日期等，**对接写入建议统一使用 `type` + `date`**。
@@ -391,16 +412,16 @@ DONE         → （不可再流转）
 }
 ```
 
-| 字段                        | 类型   | 说明                                       |
-| --------------------------- | ------ | ------------------------------------------ |
-| shareholders                | array  | 股东列表                                   |
-| shareholders[].name         | string | 股东姓名 / 企业名称                        |
-| shareholders[].amount       | number | 出资额，单位：**元**                       |
-| shareholders[].ratio        | number | 持股比例，**0~1 小数**（如 0.51 表示 51%） |
-| shareholders[].certType     | string | 证件类型（可选），取值见下方证件类型表     |
-| shareholders[].certNumber   | string | 证件号码（可选）                           |
-| shareholders[].certFrontUrl | string | 证件正面图片 URL（可选）                   |
-| shareholders[].certBackUrl  | string | 证件反面图片 URL（可选，身份证需正反面）   |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| shareholders | array | 股东列表 |
+| shareholders[].name | string | 股东姓名 / 企业名称 |
+| shareholders[].amount | number | 出资额，单位：**元** |
+| shareholders[].ratio | number | 持股比例，**0~1 小数**（如 0.51 表示 51%） |
+| shareholders[].certType | string | 证件类型（可选），取值见下方证件类型表 |
+| shareholders[].certNumber | string | 证件号码（可选） |
+| shareholders[].certFrontUrl | string | 证件正面图片 URL（可选） |
+| shareholders[].certBackUrl | string | 证件反面图片 URL（可选，身份证需正反面） |
 
 **约定说明**：
 
@@ -412,11 +433,11 @@ DONE         → （不可再流转）
 
 **证件类型 certType 取值**：
 
-| 值               | 含义     | 适用对象       |
-| ---------------- | -------- | -------------- |
-| ID_CARD          | 身份证   | 自然人股东     |
-| BUSINESS_LICENSE | 营业执照 | 企业法人股东   |
-| PASSPORT         | 护照     | 外籍自然人股东 |
+| 值 | 含义 | 适用对象 |
+|----|------|----------|
+| ID_CARD | 身份证 | 自然人股东 |
+| BUSINESS_LICENSE | 营业执照 | 企业法人股东 |
+| PASSPORT | 护照 | 外籍自然人股东 |
 
 ### 7.8 未识别事项类型（兜底）
 
@@ -570,34 +591,36 @@ X-Open-Token: <your-token>
 2. 事项明细采用 **先逻辑删除再全量重插** 策略
 3. 子表记录的 `id` 可不传，服务端会重新生成
 4. 未传的 `itemList` 视为空列表（会清空原有事项数据）
+5. `agentId`、`currentSessionId` 等辅助字段可按需传入，不会被覆盖为 null
 
 ---
 
 ## 10. 校验与注意事项
 
-| 项目             | 规则                                                     |
-| ---------------- | -------------------------------------------------------- |
-| 统一社会信用代码 | 18 位，字符集 `[0-9A-HJ-NPQRTUWXY]`                      |
-| 企业名称         | 不能为空                                                 |
-| JSON 字段        | 必须为合法 JSON 对象；空值用 `null`                      |
-| 金额单位         | `amount`、股东 `amount` 均为 **元**（非万元）            |
-| 持股比例         | 推荐 **0~1 小数**；详情展示兼容大于 1 的历史数据         |
-| 字典值           | 必须使用 `item_value` 英文代码，不要使用中文 `item_text` |
-| 时区             | 日期时间字段为 `GMT+8`                                   |
-| 开放接口         | 无删除接口；如需删除请联系本系统管理员走内部接口         |
+| 项目 | 规则 |
+|------|------|
+| 统一社会信用代码 | 18 位，字符集 `[0-9A-HJ-NPQRTUWXY]` |
+| 企业名称 | 不能为空 |
+| JSON 字段 | 必须为合法 JSON 对象；空值用 `null` |
+| 金额单位 | `amount`、股东 `amount` 均为 **元**（非万元） |
+| 持股比例 | 推荐 **0~1 小数**；详情展示兼容大于 1 的历史数据 |
+| 字典值 | 必须使用 `item_value` 英文代码，不要使用中文 `item_text` |
+| 时区 | 日期时间字段为 `GMT+8` |
+| 开放接口 | 无删除接口；如需删除请联系本系统管理员走内部接口 |
+| currentSessionId | RPA 标记字段，由 RPA 系统写入，人工操作通常不传 |
 
 ---
 
 ## 11. 附录：数据库表与字典 SQL 来源
 
-| 类型                | 位置                                                         |
-| ------------------- | ------------------------------------------------------------ |
-| 建表 + 字典初始化   | `jeecg-boot/db/biz_order_init.sql`                           |
-| 后端实体            | `jeecg-boot-module-bizorder` 模块                            |
-| 开放接口 Controller | `WorkOrderOpenApiController.java`                            |
-| 状态机枚举          | `OrderStatusEnum.java`                                       |
-| 前端 JSON 表单组件  | `jeecgboot-vue3/src/views/bizorder/workorder/BizItemChangeFields.vue` |
-| 前端聚合提交逻辑    | `WorkOrderEditDrawer.vue`                                    |
+| 类型 | 位置 |
+|------|------|
+| 建表 + 字典初始化 | `jeecg-boot/db/biz_order_init.sql` |
+| 后端实体 | `jeecg-boot-module-bizorder` 模块 |
+| 开放接口 Controller | `WorkOrderOpenApiController.java` |
+| 状态机枚举 | `OrderStatusEnum.java` |
+| 前端 JSON 表单组件 | `jeecgboot-vue3/src/views/bizorder/workorder/BizItemChangeFields.vue` |
+| 前端聚合提交逻辑 | `WorkOrderEditDrawer.vue` |
 
 ### 11.1 字典在线查询（可选）
 
@@ -615,9 +638,11 @@ GET /jeecg-boot/sys/dict/getDictItems/biz_item_name
 
 ## 12. 变更记录
 
-| 版本 | 日期       | 说明                                                         |
-| ---- | ---------- | ------------------------------------------------------------ |
-| v1.0 | 2026-05-24 | 首版：整合字典、状态机、事项 JSON 规范及开放接口说明         |
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| v1.0 | 2026-05-24 | 首版：整合字典、状态机、事项 JSON 规范及开放接口说明 |
 | v1.1 | 2026-05-25 | EQUITY 事项增加股东证件字段（certType / certNumber / certFrontUrl / certBackUrl） |
 | v2.0 | 2026-05-26 | 去除经办人相关内容（由后台管理端创建关联）；新增 CONFIRM_BY_C / CONFIRM_BY_A 状态；新增 customerConfirmed 字段；开放接口新增默认状态改为 CONFIRM_BY_C |
-| v2.1 | 2026-05-26 | CAPITAL（注册资本）事项新增 `shareholders` 股东出资明细字段；移除 `contributionType` 字段 |
+| v2.1 | 2026-05-26 | CAPITAL（注册资本）事项新增 `shareholders` 股东出资明细字段（beforeChange 手动填写，afterChange 按比例自动计算）；移除 `contributionType` 字段 |
+| v2.2 | 2026-05-29 | PENDING 状态中文名由「待填报」改为「待提交」；删除 SAVED、CONFIRMED 状态，新增 CANCEL（取消/终止办理）；workOrder 新增 `agentId`（经办人ID）、`currentSessionId`（RPA 会话标记）字段；补充 confirmByCustomer 免鉴权说明；补充经办人确认前校验说明 |
+| v2.3 | 2026-06-08 | 法定代表人 LEGAL 事项 `afterChange` 新增可选字段 `phone`、`idCardFrontUrl`、`idCardBackUrl`（新法人手机号及身份证正反面图片）；`beforeChange` 保持不变仅含 `name` |
