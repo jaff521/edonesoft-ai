@@ -27,7 +27,7 @@ metadata: {
 2. **逻辑处理**：
    - 若输入是远程 URL，先下载到临时文件。
    - 获取文件名。
-   - 调用 `skills/oss-uploader/scripts/upload_tool.py` 进行上传。
+   - 调用 `{baseDir}/scripts/upload_tool.py` 进行上传。
    - 上传路径规则：`openclaw/YYYYMMDD/{filename}`。
 3. **反馈**：上传完成后，输出 OSS 的完整路径或结果回执。
 

@@ -24,7 +24,7 @@ metadata: {
 - 证件 OCR 环境变量：`DASHSCOPE_API_KEY`, `DASHSCOPE_API_BASE` (可选), `DASHSCOPE_VISION_MODEL` (可选)
 
 ## 核心原则
-- **动态加载规则**：你需要根据客户意图，动态读取 `skills/ic-assistant/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
+- **动态加载规则**：你需要根据客户意图，动态读取 `{baseDir}/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
 - **统一数据流**：所有收集完毕的数据最终必须生成标准 JSON（任务资料），再调用 `ticket-creator` 创建工单。
 - **复用数据**：同一个公司的查询结果（如名称、信用代码等）需在不同变更事项间复用。
 
@@ -34,10 +34,10 @@ metadata: {
 
 ### Step 1: 身份确认与意图判定
 - **询问公司全称**：若客户未提及，首先询问公司名称。
-- **调用查询脚本**：调用 `skills/ic-assistant/scripts/unified_query.py` 自动查询获取企业基本信息（法人、注册资本、原股东列表等）。
+- **调用查询脚本**：调用 `{baseDir}/scripts/unified_query.py` 自动查询获取企业基本信息（法人、注册资本、原股东列表等）。
   - **调用命令**：
     ```bash
-    python3 skills/ic-assistant/scripts/unified_query.py "{公司全称}"
+    python3 {baseDir}/scripts/unified_query.py "{公司全称}"
     ```
 - **确认办理事项**：向客户确认本次需要办理的具体变更事项（可多选）。
   1. 经营期限变更
@@ -47,10 +47,10 @@ metadata: {
 
 ### Step 2: 加载具体业务规则 (关键步骤)
 根据客户选择的变更事项，**必须先使用系统能力读取**对应的业务参考文档，再向客户进行索要：
-- 若包含**经营期限变更**：读取 `skills/ic-assistant/references/PERIOD.md`
-- 若包含**股权变更**：读取 `skills/ic-assistant/references/EQUITY.md`
-- 若包含**减资变更**：读取 `skills/ic-assistant/references/REDUCTION.md`
-- 若包含**法定代表人变更**：读取 `skills/ic-assistant/references/LEGAL.md`
+- 若包含**经营期限变更**：读取 `{baseDir}/references/PERIOD.md`
+- 若包含**股权变更**：读取 `{baseDir}/references/EQUITY.md`
+- 若包含**减资变更**：读取 `{baseDir}/references/REDUCTION.md`
+- 若包含**法定代表人变更**：读取 `{baseDir}/references/LEGAL.md`
 
 > [!IMPORTANT]
 > 严格遵循参考文档中定义的“办理逻辑”进行引导、计算和校验。
@@ -58,11 +58,33 @@ metadata: {
 
 ### Step 3: 材料收集与校验 (参考具体业务文档)
 - 根据参考文档指引收集字段和证件照片。
-- 证件照片验证需调用脚本：
-  ```bash
-  python3 skills/ic-assistant/scripts/validate_document.py
-  ```
-- 图片需调用 `oss-uploader` 上传至 OSS 获取永久链接。
+
+#### 3.1 证件照片处理流程（通用）
+当客户发送证件图片时，按以下顺序处理：
+
+**① 获取图片路径**
+- 客户在微信群中发送的图片会被平台转为一个可访问的远程 URL（`http/https`）。
+- 也可能是本地文件路径（如通过其他方式提前下载）。
+- 无论是远程 URL 还是本地路径，均可直接作为参数传入脚本，脚本内部会自动处理远程下载。
+
+**② 调用 `validate_document.py` 进行 OCR 识别**
+```bash
+# 身份证识别
+python3 {baseDir}/scripts/validate_document.py idcard "{图片路径或URL}" "{对比姓名}"
+
+# 营业执照识别
+python3 {baseDir}/scripts/validate_document.py business_license "{图片路径或URL}" "{对比企业名}"
+```
+- 脚本支持远程 URL 输入，内部自动下载到临时文件后处理。
+- 返回 JSON 格式结果，包含 `success`、`extracted`（OCR 提取的字段）、`matched`（姓名是否匹配）、`issues`（问题列表）。
+- **OCR 成功**：展示识别结果给客户确认（姓名、证件号、有效期等）。
+- **OCR 失败**：提示"图片不清晰，请重新拍摄"，等待客户重传。
+- **姓名不匹配**：提示具体差异，请客户核实。
+- **证件过期**：提示"身份证已过期，请使用有效期内的证件"。
+
+**③ 调用 `oss-uploader` Skill 上传图片到 OSS**
+- OCR 验证通过后，将图片（远程 URL 或本地路径）传入 `oss-uploader` Skill 上传至 OSS。
+- 获取返回的 OSS 永久访问地址，回填到对应的字段（如 `idCardFrontUrl`、`certFrontUrl` 等）。
 
 ### Step 4: 汇总确认
 在收集齐所有选中事项的全部必填材料后，向客户进行最终的信息汇总与展示：
