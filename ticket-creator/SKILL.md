@@ -125,7 +125,7 @@ metadata: {
 #### itemList 变更登记事项列表（数组）
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| itemName | ✅ | 事项名称代码，如：`ADDR`、`LEGAL`、`CAPITAL`、`SCOPE`、`NAME`、`EQUITY`、`PERIOD` |
+| itemName | ✅ | 事项名称代码，如：`ADDR`、`LEGAL`、`CAPITAL`、`SCOPE`、`NAME`、`EQUITY`、`PERIOD`、`POSITION` |
 | beforeChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构，如 `CAPITAL.amount` 单位为元、`EQUITY.ratio` 为 0~1 小数 |
 | afterChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构 |
 
@@ -136,6 +136,7 @@ metadata: {
 - 经营范围变更 → `matterType: "CHANGE"`，`itemName: "SCOPE"`
 - 企业名称变更 → `matterType: "CHANGE"`，`itemName: "NAME"`
 - 股东/股权变更 → `matterType: "CHANGE"`，`itemName: "EQUITY"`
+- 职务变更 → `matterType: "CHANGE"`，`itemName: "POSITION"`
 
 ### 事项 JSON 结构要求
 - `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "shareholders": [{"name": "张三", "amount": 2500000, "ratio": 0.50}]}`
@@ -146,8 +147,13 @@ metadata: {
   - `beforeChange`（原法人，仅姓名）：`{"name": "张三"}`
   - `afterChange`（新法人）：`{"name": "李四", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}`
   - `phone`、`idCardFrontUrl`、`idCardBackUrl` 在法定代表人变更场景为**业务必填字段**，须由上层 Skill（ic-legal-assistant）在建单前收集完毕
+  - v2.6 新增：`needSupervisor`（boolean）+ `supervisor`（对象，含 `name`/`phone`/`idCardFrontUrl`/`idCardBackUrl`），仅 afterChange，当 `needSupervisor=true` 时须填写
+- `POSITION`（⚠️ 注意 before / after 结构不同，v2.5 新增）：
+  - `beforeChange`：`{"name": "张三", "position": "总经理"}`
+  - `afterChange`：`{"name": "李四", "position": "副总经理", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}`
+  - `phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 afterChange，均为可选字段
 - `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
-- `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://..."}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）
+- `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"phone":"138...","certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://...","subscriptionStartDate":"2026-01-01","subscriptionContributionDate":"2030-12-31"}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）。`subscriptionStartDate`/`subscriptionContributionDate` 仅 afterChange（v2.5 新增）。afterChange 还可含 `equityTransfers`（股权转让列表）、`enterpriseType`（变更后企业类型）、`needSupervisor`+`supervisor`（监事信息，v2.6 新增）
 
 ---
 
