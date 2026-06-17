@@ -16,6 +16,7 @@
    - 4.2 [ticket-creator — 工单创建](#42-ticket-creator--工单创建)
    - 4.3 [ic-rpa-executor — RPA 自动执行](#43-ic-rpa-executor--rpa-自动执行)
    - 4.4 [oss-uploader — 文件上传](#44-oss-uploader--文件上传)
+   - 4.5 [recruitment-assistant — 招聘助手](#45-recruitment-assistant--招聘助手)
 5. [工单状态机](#5-工单状态机)
 6. [环境变量配置](#6-环境变量配置)
 7. [服务依赖关系](#7-服务依赖关系)
@@ -302,6 +303,22 @@ if 超时:
 
 ---
 
+### 4.5 recruitment-assistant — 招聘助手
+
+**文件**：[recruitment-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/recruitment-assistant/SKILL.md)  
+**脚本**：[recruitment_callback.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/recruitment-assistant/scripts/recruitment_callback.py)
+
+**职责**：负责在一对一私聊中进行拟人化招聘对话，并在合适时间向求职者索要简历、打分评估，最后协商面试时间并进行面试预约回调。
+
+**依赖环境变量**：
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `RECRUITMENT_API_URL` | ❌ | 招聘接口回调地址 |
+| `RECRUITMENT_API_TOKEN` | ❌ | 接口 Authorization Bearer Token 凭证 |
+
+---
+
 ## 5. 工单状态机
 
 ```
@@ -496,8 +513,13 @@ skills/
 │   └── scripts/
 │       └── rpa_executor.py           # RPA 自动化执行主脚本
 │
-└── oss-uploader/
-    ├── SKILL.md                      # OSS 上传 Skill 定义
+├── oss-uploader/
+│   ├── SKILL.md                      # OSS 上传 Skill 定义
+│   └── scripts/
+│       └── upload_tool.py            # 文件上传工具
+│
+└── recruitment-assistant/
+    ├── SKILL.md                      # 招聘助手 Skill 定义
     └── scripts/
-        └── upload_tool.py            # 文件上传工具
+        └── recruitment_callback.py   # 招聘助手回调接口脚本
 ```
