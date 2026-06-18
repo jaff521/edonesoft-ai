@@ -130,11 +130,17 @@ def parse_idcard_response(text):
     id_number = re.search(r'["`]?id_number["`]?[:：]\s*["`]?([^["`\n,}]+)["`]?', text, re.I)
     expiry = re.search(r'["`]?expiry_date["`]?[:：]\s*["`]?([^["`\n,}]+)["`]?', text, re.I)
     is_expired = re.search(r'["`]?is_expired["`]?[:：]\s*(true|false|yes|no)', text, re.I)
+    issuing_auth = re.search(r'["`]?issuing_authority["`]?[:：]\s*["`]?([^["`\n,}]+)["`]?', text, re.I)
+    side = re.search(r'["`]?side["`]?[:：]\s*["`]?(front|back)["`]?', text, re.I)
+    address = re.search(r'["`]?address["`]?[:：]\s*["`]?([^["`\n,}]+)["`]?', text, re.I)
 
     result = {}
     if name: result["name"] = name.group(1).strip()
     if id_number: result["id_number"] = id_number.group(1).strip()
     if expiry: result["expiry_date"] = expiry.group(1).strip()
+    if issuing_auth: result["issuing_authority"] = issuing_auth.group(1).strip()
+    if side: result["side"] = side.group(1).strip()
+    if address: result["address"] = address.group(1).strip()
 
     # 判断是否过期
     if is_expired:
@@ -181,13 +187,16 @@ def validate_document(doctype, image_path, compare_name=None):
     if doctype == "idcard":
         prompt = '''请仔细识别这张身份证照片中的所有信息，直接返回JSON格式，不要其他内容：
 {
-  "name": "身份证上的姓名",
-  "id_number": "身份证号码",
+  "name": "身份证上的姓名（人像面可见，国徽面无此字段则留空）",
+  "id_number": "身份证号码（人像面可见，国徽面无此字段则留空）",
   "gender": "性别",
   "birth_date": "出生日期",
+  "address": "住址（人像面可见，国徽面无此字段则留空）",
   "expiry_date": "证件有效期（格式如2025-01-01或长期）",
   "is_expired": true或false（判断是否已过期），
-  "nationality": "国籍"
+  "nationality": "国籍",
+  "issuing_authority": "签发机关/发证机关（国徽面可见，人像面无此字段则留空）",
+  "side": "front或back（判断是人像面front还是国徽面back）"
 }'''
     elif doctype == "business_license":
         prompt = '''请仔细识别这张营业执照照片中的所有信息，直接返回JSON格式，不要其他内容：

@@ -1,7 +1,7 @@
 # 工商变更工单模块 — 外部系统对接参考文档
 
-> **文档版本**：v2.3  
-> **更新日期**：2026-06-08  
+> **文档版本**：v2.7  
+> **更新日期**：2026-06-17  
 > **适用模块**：工单管理（前端路由 `/bizorder/workOrder`）  
 > **数据来源**：数据库字典（`sys_dict` / `sys_dict_item`）、后端实体与开放接口、前端事项 JSON 表单组件
 
@@ -74,6 +74,7 @@
 | POST | `/add` | 新增工单（聚合写入） |
 | PUT | `/edit` | 编辑工单（主单更新 + 子表全量替换） |
 | POST | `/transit?id={id}&targetStatus={status}` | 状态流转（受状态机约束） |
+| POST | `/confirmEquityChange` | 股权变更确认（含转让明细+企业类型，CONFIRM_BY_A→PENDING） |
 
 ### 4.1 列表查询参数
 
@@ -193,6 +194,7 @@ DONE         → （不可再流转）
 
 > `CONFIRM_BY_C → CONFIRM_BY_A` 由 H5 的「确认资料无误」按钮触发（接口 `/bizorder/workOrder/confirmByCustomer`，免鉴权），非 `/transit` 接口。
 > `CONFIRM_BY_A → PENDING` 由后台管理端「经办人确认」按钮触发（接口 `/bizorder/workOrder/confirmByAgent`，需权限 `bizorder:workOrder:edit`）。**确认前会校验工单是否已关联经办人，若未关联则需先选择经办人。**
+> 若工单包含 **股权变更（EQUITY）** 事项，确认时会弹出股权变更确认弹窗，需填写**股权转让明细**和**变更后企业类型**，提交后调用 `/bizorder/workOrder/confirmEquityChange` 接口（v2.4 新增）。
 
 非法流转将返回业务异常，如：`工单状态不允许从 PENDING 流转到 DONE`。
 
@@ -239,6 +241,7 @@ DONE         → （不可再流转）
 | 经营期限 | PERIOD | 期限类型 + 到期日 |
 | 经营地址 | ADDR | 多行文本 `address` |
 | 法定代表人 | LEGAL | 单字段 `name`（变更后额外含手机号、身份证） |
+| 职务 | POSITION | 姓名 + 职务（变更后额外含电话号码） |
 
 ---
 
@@ -248,6 +251,8 @@ DONE         → （不可再流转）
 `beforeChange` 与 `afterChange` 使用 **相同结构**，分别表示变更前、变更后的快照。
 
 ### 7.1 企业名称 NAME
+
+> beforeChange 与 afterChange 结构相同，分别表示变更前后的企业名称。
 
 ```json
 {
@@ -286,10 +291,69 @@ DONE         → （不可再流转）
 | phone | string | 否（仅 afterChange） | 新法定代表人手机号 |
 | idCardFrontUrl | string | 否（仅 afterChange） | 新法定代表人身份证正面图片 URL |
 | idCardBackUrl | string | 否（仅 afterChange） | 新法定代表人身份证反面图片 URL |
+| needSupervisor | boolean | 否（仅 afterChange） | 是否需要设置一名监事，v2.6 新增 |
+| supervisor | object | 否（仅 afterChange，needSupervisor=true 时必填） | 监事信息对象，v2.6 新增 |
+| supervisor.name | string | 是(若有该对象) | 监事姓名 |
+| supervisor.phone | string | 否 | 监事手机号 |
+| supervisor.idCardFrontUrl | string | 否 | 监事身份证正面图片 URL |
+| supervisor.idCardBackUrl | string | 否 | 监事身份证反面图片 URL |
 
-> **约定**：`beforeChange` 仅保留变更前的姓名。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（新法定代表人信息），均为可选字段——有值则前端展示，无值则不显示。
+> **约定**：`beforeChange` 仅保留变更前的姓名。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（新法定代表人信息），均为可选字段。`needSupervisor` 和 `supervisor` 仅用于 `afterChange`，当 `needSupervisor=true` 时需填写监事信息。
 
-### 7.3 注册资本 CAPITAL
+**LEGAL afterChange 含监事的完整示例：**
+
+```json
+{
+  "name": "李四",
+  "phone": "13800138000",
+  "idCardFrontUrl": "https://example.com/files/legal_idcard_front.jpg",
+  "idCardBackUrl": "https://example.com/files/legal_idcard_back.jpg",
+  "needSupervisor": true,
+  "supervisor": {
+    "name": "王五",
+    "phone": "13900139000",
+    "idCardFrontUrl": "https://example.com/files/sup_front.jpg",
+    "idCardBackUrl": "https://example.com/files/sup_back.jpg"
+  }
+}
+```
+
+### 7.3 职务 POSITION
+
+**变更前（beforeChange）** — 姓名 + 职务：
+
+```json
+{
+  "name": "张三",
+  "position": "总经理"
+}
+```
+
+**变更后（afterChange）** — 姓名 + 职务 + 电话号码：
+
+```json
+{
+  "name": "李四",
+  "position": "副总经理",
+  "phone": "13800138000",
+  "idCardFrontUrl": "https://example.com/files/pos_front.jpg",
+  "idCardBackUrl": "https://example.com/files/pos_back.jpg"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| name | string | **是** | 人员姓名 |
+| position | string | **是** | 职务名称 |
+| phone | string | 否（仅 afterChange） | 变更后人员电话号码 |
+| idCardFrontUrl | string | 否（仅 afterChange） | 变更后人员身份证正面图片 URL，v2.6 新增 |
+| idCardBackUrl | string | 否（仅 afterChange） | 变更后人员身份证反面图片 URL，v2.6 新增 |
+
+> **约定**：`beforeChange` 仅需姓名和职务。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（变更后新人员信息），均为可选字段。
+
+### 7.4 注册资本 CAPITAL
+
+> beforeChange 与 afterChange 结构相同，分别表示变更前后的注册资本快照。
 
 ```json
 {
@@ -338,7 +402,9 @@ DONE         → （不可再流转）
 | HKD | 港币 |
 | JPY | 日元 |
 
-### 7.4 经营范围 SCOPE
+### 7.5 经营范围 SCOPE
+
+> beforeChange 与 afterChange 结构相同，分别表示变更前后的经营范围。
 
 ```json
 {
@@ -350,7 +416,9 @@ DONE         → （不可再流转）
 |------|------|------|
 | scope | string | 经营范围全文，多条可用顿号或分号分隔 |
 
-### 7.5 经营地址 ADDR
+### 7.6 经营地址 ADDR
+
+> beforeChange 与 afterChange 结构相同，分别表示变更前后的经营地址。
 
 ```json
 {
@@ -362,7 +430,9 @@ DONE         → （不可再流转）
 |------|------|------|
 | address | string | 完整经营地址 |
 
-### 7.6 经营期限 PERIOD
+### 7.7 经营期限 PERIOD
+
+> beforeChange 与 afterChange 结构相同，分别表示变更前后的经营期限。
 
 ```json
 {
@@ -386,7 +456,52 @@ DONE         → （不可再流转）
 
 > 详情展示层还兼容别名：`periodType`、`endDate`、字符串直传日期等，**对接写入建议统一使用 `type` + `date`**。
 
-### 7.7 股权 EQUITY
+### 7.8 股权 EQUITY
+
+**变更前（beforeChange）** — 仅股东基本信息：
+
+```json
+{
+  "shareholders": [
+    {
+      "name": "王五",
+      "amount": 3000000,
+      "ratio": 0.60,
+      "phone": "13800138000",
+      "certType": "ID_CARD",
+      "certNumber": "310101199001011234",
+      "certFrontUrl": "https://example.com/files/xxx_front.jpg",
+      "certBackUrl": "https://example.com/files/xxx_back.jpg"
+    },
+    {
+      "name": "赵六",
+      "amount": 2000000,
+      "ratio": 0.40,
+      "phone": "13900139000",
+      "certType": "ID_CARD",
+      "certNumber": "310101198501012345",
+      "certFrontUrl": "https://example.com/files/yyy_front.jpg",
+      "certBackUrl": "https://example.com/files/yyy_back.jpg"
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| shareholders | array | 变更前股东列表 |
+| shareholders[].name | string | 股东姓名 / 企业名称 |
+| shareholders[].amount | number | 出资额，单位：**元** |
+| shareholders[].ratio | number | 持股比例，**0~1 小数**（如 0.60 表示 60%） |
+| shareholders[].phone | string | 股东手机号（可选） |
+| shareholders[].certType | string | 证件类型（可选），取值：ID_CARD / BUSINESS_LICENSE / PASSPORT |
+| shareholders[].certNumber | string | 证件号码（可选） |
+| shareholders[].certFrontUrl | string | 证件正面图片 URL（可选） |
+| shareholders[].certBackUrl | string | 证件反面图片 URL（可选） |
+
+> **约定**：`beforeChange` 仅包含变更前股东列表及其证件信息。`equityTransfers`、`enterpriseType`、`needSupervisor`、`supervisor`、`subscriptionStartDate`、`subscriptionContributionDate` 等字段仅用于 `afterChange`。
+
+**变更后（afterChange）** — 股东 + 转让明细 + 企业类型 + 监事：
 
 ```json
 {
@@ -395,20 +510,44 @@ DONE         → （不可再流转）
       "name": "王五",
       "amount": 2550000,
       "ratio": 0.51,
+      "phone": "13800138000",
       "certType": "ID_CARD",
       "certNumber": "310101199001011234",
       "certFrontUrl": "https://example.com/files/xxx_front.jpg",
-      "certBackUrl": "https://example.com/files/xxx_back.jpg"
+      "certBackUrl": "https://example.com/files/xxx_back.jpg",
+      "subscriptionStartDate": "2026-01-01",
+      "subscriptionContributionDate": "2030-12-31"
     },
     {
       "name": "某投资有限公司",
       "amount": 1500000,
       "ratio": 0.30,
+      "phone": "021-12345678",
       "certType": "BUSINESS_LICENSE",
       "certNumber": "91310000MA002B002X",
-      "certFrontUrl": "https://example.com/files/yyy_license.jpg"
+      "certFrontUrl": "https://example.com/files/yyy_license.jpg",
+      "subscriptionStartDate": "2026-01-01",
+      "subscriptionContributionDate": "2028-06-30"
     }
-  ]
+  ],
+  "equityTransfers": [
+    {
+      "transferor": "王五",
+      "transferee": "孙七",
+      "transferDate": "2026-06-12",
+      "transferAmount": 45.00,
+      "transferPrice": 50.00,
+      "transferType": "PURCHASE"
+    }
+  ],
+  "enterpriseType": "有限责任公司(自然人投资或控股)",
+  "needSupervisor": true,
+  "supervisor": {
+    "name": "赵八",
+    "phone": "13700137000",
+    "idCardFrontUrl": "https://example.com/files/sup_eq_front.jpg",
+    "idCardBackUrl": "https://example.com/files/sup_eq_back.jpg"
+  }
 }
 ```
 
@@ -418,10 +557,27 @@ DONE         → （不可再流转）
 | shareholders[].name | string | 股东姓名 / 企业名称 |
 | shareholders[].amount | number | 出资额，单位：**元** |
 | shareholders[].ratio | number | 持股比例，**0~1 小数**（如 0.51 表示 51%） |
+| shareholders[].phone | string | 股东手机号（可选，v2.4 新增） |
+| shareholders[].subscriptionStartDate | string | 认缴开始时间（可选，仅 afterChange，v2.5 新增），格式 `YYYY-MM-DD` |
+| shareholders[].subscriptionContributionDate | string | 认缴出资时间（可选，仅 afterChange，v2.5 新增），格式 `YYYY-MM-DD` |
 | shareholders[].certType | string | 证件类型（可选），取值见下方证件类型表 |
 | shareholders[].certNumber | string | 证件号码（可选） |
 | shareholders[].certFrontUrl | string | 证件正面图片 URL（可选） |
 | shareholders[].certBackUrl | string | 证件反面图片 URL（可选，身份证需正反面） |
+| equityTransfers | array | 股权转让列表（仅 afterChange，v2.4 新增） |
+| equityTransfers[].transferor | string | 转让方姓名 |
+| equityTransfers[].transferee | string | 受让方姓名 |
+| equityTransfers[].transferDate | string | 转让日期，格式 `yyyy-MM-dd` |
+| equityTransfers[].transferAmount | number | 转让股权数额，单位：**万元** |
+| equityTransfers[].transferPrice | number | 转让价格，单位：**万元** |
+| equityTransfers[].transferType | string | 转让类型，取值见下方转让类型表 |
+| enterpriseType | string | 变更后企业类型（仅 afterChange，v2.4 新增） |
+| needSupervisor | boolean | 是否需要设置一名监事（仅 afterChange，v2.6 新增） |
+| supervisor | object | 监事信息对象（仅 afterChange，needSupervisor=true 时必填，v2.6 新增） |
+| supervisor.name | string | 监事姓名 |
+| supervisor.phone | string | 监事手机号 |
+| supervisor.idCardFrontUrl | string | 监事身份证正面图片 URL |
+| supervisor.idCardBackUrl | string | 监事身份证反面图片 URL |
 
 **约定说明**：
 
@@ -430,6 +586,7 @@ DONE         → （不可再流转）
 - 过滤掉 name、amount、ratio 均为空的股东行
 - 证件字段均为可选，仅在已上传 / 填写时出现
 - 股权变更时，`beforeChange` 存储原股东及其证件信息，`afterChange` 存储新股东及其证件信息
+- `equityTransfers` 和 `enterpriseType` 由经办人在确认环节填写，通过 `confirmEquityChange` 接口写入
 
 **证件类型 certType 取值**：
 
@@ -439,9 +596,38 @@ DONE         → （不可再流转）
 | BUSINESS_LICENSE | 营业执照 | 企业法人股东 |
 | PASSPORT | 护照 | 外籍自然人股东 |
 
-### 7.8 未识别事项类型（兜底）
+**转让类型 transferType 取值**：
 
-若 `itemName` 不在上述 7 种标准类型内，可传任意合法 JSON 对象，例如：
+| 值 | 含义 |
+|----|------|
+| PURCHASE | 购买 |
+| INHERITANCE | 继承 |
+| GIFT | 赠予 |
+| JUDICIAL | 司法判决 |
+| OTHER | 其他 |
+
+**企业类型 enterpriseType 常用取值**：
+
+| 值 |
+|----|
+| 有限责任公司(自然人投资或控股) |
+| 有限责任公司(自然人独资) |
+| 有限责任公司(法人独资) |
+| 有限责任公司(非自然人投资或控股的法人独资) |
+| 有限责任公司(外商投资企业投资) |
+| 有限责任公司(外国自然人独资) |
+| 有限责任公司(台港澳自然人独资) |
+| 有限责任公司(台港澳与境内合资) |
+| 有限责任公司(中外合资) |
+| 有限责任公司(国有独资) |
+| 股份有限公司(上市) |
+| 股份有限公司(非上市) |
+| 一人有限责任公司 |
+| 其他有限责任公司 |
+
+### 7.9 未识别事项类型（兜底）
+
+若 `itemName` 不在上述 8 种标准类型内，可传任意合法 JSON 对象，例如：
 
 ```json
 {
@@ -646,3 +832,7 @@ GET /jeecg-boot/sys/dict/getDictItems/biz_item_name
 | v2.1 | 2026-05-26 | CAPITAL（注册资本）事项新增 `shareholders` 股东出资明细字段（beforeChange 手动填写，afterChange 按比例自动计算）；移除 `contributionType` 字段 |
 | v2.2 | 2026-05-29 | PENDING 状态中文名由「待填报」改为「待提交」；删除 SAVED、CONFIRMED 状态，新增 CANCEL（取消/终止办理）；workOrder 新增 `agentId`（经办人ID）、`currentSessionId`（RPA 会话标记）字段；补充 confirmByCustomer 免鉴权说明；补充经办人确认前校验说明 |
 | v2.3 | 2026-06-08 | 法定代表人 LEGAL 事项 `afterChange` 新增可选字段 `phone`、`idCardFrontUrl`、`idCardBackUrl`（新法人手机号及身份证正反面图片）；`beforeChange` 保持不变仅含 `name` |
+| v2.4 | 2026-06-12 | EQUITY 事项新增 `shareholders[].phone` 字段；新增 `equityTransfers`（股权转让列表）、`enterpriseType`（变更后企业类型）字段（仅 afterChange）；新增 `/confirmEquityChange` 接口用于股权变更确认 |
+| v2.5 | 2026-06-17 | 新增事项类型 POSITION（职务变更），包含 `name`、`position`、`phone` 字段（phone 仅 afterChange）；EQUITY `shareholders` 新增 `subscriptionStartDate`（认缴开始时间）、`subscriptionContributionDate`（认缴出资时间）字段（仅 afterChange） |
+| v2.6 | 2026-06-17 | LEGAL 事项 `afterChange` 新增 `needSupervisor`（是否需要监事）、`supervisor`（监事姓名/手机号/身份证正反面）字段；EQUITY 事项 `afterChange` 新增 `needSupervisor`、`supervisor` 字段；POSITION 事项 `afterChange` 新增 `idCardFrontUrl`、`idCardBackUrl`（身份证正反面）字段 |
+| v2.7 | 2026-06-17 | 文档完善：所有事项类型（NAME、LEGAL、POSITION、CAPITAL、SCOPE、ADDR、PERIOD、EQUITY）均补充了 `beforeChange` 结构说明或标注 "beforeChange 与 afterChange 结构相同"；EQUITY 新增变更前股东列表示例及独立字段表 |

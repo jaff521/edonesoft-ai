@@ -37,10 +37,24 @@
    - `certNumber` → OCR 识别的统一社会信用代码
    - `certFrontUrl` → 执照 OSS URL
 
-### 5. 进度跟踪
+### 5. 股东手机号收集（可选）
+可一并收集各股东的联系电话，回填到 `phone` 字段。
+
+### 6. 认缴时间收集（可选）
+变更后股东可选填认缴开始时间 (`subscriptionStartDate`) 和认缴出资时间 (`subscriptionContributionDate`)，格式 `YYYY-MM-DD`。仅用于 afterChange。
+
+### 7. 进度跟踪
 检查 `itemListDraft` 中所有变更后股东的证件字段（`certType`/`certNumber`/`certFrontUrl`，自然人还需 `certBackUrl`）是否已填入有效值。
 - 示例话术：「进度：已收 2/3 名股东的证件」
 - 未收齐的继续逐一索要。
+
+### 8. 监事信息收集（可选）
+如客户表示需要设置监事（`needSupervisor=true`），还需收集：
+- 监事姓名（必填）
+- 监事手机号（可选）
+- 监事身份证正反面照片（可选，流程同主控 SKILL.md Step 3.1）
+
+> **注意**：`equityTransfers`（股权转让明细）和 `enterpriseType`（变更后企业类型）由后台经办人在确认环节填写，材料收集阶段**无需**向客户索要。
 
 ## 字段结构规范
 ```json
@@ -48,21 +62,40 @@
   "itemName": "EQUITY",
   "beforeChange": {
     "shareholders": [
-      { "name": "{原股东姓名}", "amount": {原出资额_元}, "ratio": {原持股比例_0至1} }
+      {
+        "name": "{原股东姓名}",
+        "amount": "{原出资额_元}",
+        "ratio": "{原持股比例_0至1}",
+        "phone": "{股东手机号（可选）}",
+        "certType": "{ID_CARD 或 BUSINESS_LICENSE 或 PASSPORT}",
+        "certNumber": "{证件号码}",
+        "certFrontUrl": "{正面 OSS 地址}",
+        "certBackUrl": "{反面 OSS 地址}"
+      }
     ]
   },
   "afterChange": {
     "shareholders": [
       {
         "name": "{新股东姓名}",
-        "amount": {新出资额_元},
-        "ratio": {新持股比例_0至1},
-        "certType": "{ID_CARD 或 BUSINESS_LICENSE}",
+        "amount": "{新出资额_元}",
+        "ratio": "{新持股比例_0至1}",
+        "phone": "{股东手机号（可选）}",
+        "certType": "{ID_CARD 或 BUSINESS_LICENSE 或 PASSPORT}",
         "certNumber": "{证件号码}",
         "certFrontUrl": "{正面 OSS 地址}",
-        "certBackUrl": "{反面 OSS 地址，自然人必填}"
+        "certBackUrl": "{反面 OSS 地址，自然人必填}",
+        "subscriptionStartDate": "{认缴开始时间 YYYY-MM-DD（可选）}",
+        "subscriptionContributionDate": "{认缴出资时间 YYYY-MM-DD（可选）}"
       }
-    ]
+    ],
+    "needSupervisor": "{是否需要监事，boolean（可选）}",
+    "supervisor": {
+      "name": "{监事姓名（needSupervisor=true 时必填）}",
+      "phone": "{监事手机号（可选）}",
+      "idCardFrontUrl": "{监事身份证正面 OSS URL（可选）}",
+      "idCardBackUrl": "{监事身份证反面 OSS URL（可选）}"
+    }
   }
 }
 ```
