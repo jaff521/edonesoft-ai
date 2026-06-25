@@ -50,6 +50,9 @@ ORDER_STATUS_ALIASES = {
     "取消": "CANCEL",
     "终止办理": "CANCEL",
     "取消/终止办理": "CANCEL",
+    "已下发RPA": "DISPATCHED",
+    "RPA执行中": "RUNNING",
+    "RPA执行完成待确认": "WAIT_CONFIRM",
     "办理中": "PROCESSING",
     "已办结": "DONE",
 }
@@ -69,6 +72,13 @@ ITEM_NAME_ALIASES = {
     "股权": "EQUITY",
     "职务": "POSITION",
     "职务变更": "POSITION",
+    "高级管理人员备案": "SENIOR_MANAGER",
+    "登记联络员备案": "LIAISON",
+    "联络员": "LIAISON",
+    "章程备案时间": "BYLAW_ARTICLE",
+    "章程备案": "BYLAW_ARTICLE",
+    "监事备案": "SUPERVISOR",
+    "监事": "SUPERVISOR",
 }
 
 
@@ -145,7 +155,8 @@ def normalize_name_change(change: Dict[str, Any]) -> Dict[str, Any]:
 def normalize_legal_change(change: Dict[str, Any], is_after: bool = False) -> Dict[str, Any]:
     """法定代表人 LEGAL 事项归一化。
     beforeChange：仅保留 name。
-    afterChange：name 必填，额外透传 phone / idCardFrontUrl / idCardBackUrl / needSupervisor / supervisor（均可选）。
+    afterChange：name 必填，额外透传 phone / idCardFrontUrl / idCardBackUrl / needLiaison / liaison（均可选）。
+    注：监事已拆分为独立事项 SUPERVISOR，不再内嵌在 LEGAL 中。
     """
     name = change.get("name")
     if not name:
@@ -161,13 +172,13 @@ def normalize_legal_change(change: Dict[str, Any], is_after: bool = False) -> Di
             val = change.get(field)
             if val not in (None, ""):
                 result[field] = val
-        # v2.6: 监事信息
-        need_sup = change.get("needSupervisor")
-        if need_sup is not None:
-            result["needSupervisor"] = need_sup
-        supervisor = change.get("supervisor")
-        if isinstance(supervisor, dict) and supervisor.get("name"):
-            result["supervisor"] = supervisor
+        # v2.9: 登记联络员
+        need_liaison = change.get("needLiaison")
+        if need_liaison is not None:
+            result["needLiaison"] = need_liaison
+        liaison = change.get("liaison")
+        if isinstance(liaison, dict) and liaison.get("name"):
+            result["liaison"] = liaison
 
     return result
 
@@ -319,7 +330,7 @@ def normalize_equity_change(change: Dict[str, Any], is_after: bool = False) -> D
     return result
 
 
-def normalize_capital_change(change: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_capital_change(change: Dict[str, Any], is_after: bool = False) -> Dict[str, Any]:
     amount = parse_amount_to_yuan(change.get("amount"))
     if amount is None:
         raw_value = first_non_empty_value(change)
@@ -350,6 +361,14 @@ def normalize_capital_change(change: Dict[str, Any]) -> Dict[str, Any]:
             ratio_value = parse_ratio_to_float(sh_ratio)
             if ratio_value is not None:
                 entry["ratio"] = ratio_value
+
+            # v2.8: 认缴时间（仅 afterChange）
+            if is_after:
+                for date_key in ("subscriptionStartDate", "subscriptionContributionDate"):
+                    date_value = sh.get(date_key)
+                    if date_value not in (None, ""):
+                        entry[date_key] = date_value
+
             if entry:
                 normalized_shs.append(entry)
         result["shareholders"] = normalized_shs
@@ -357,27 +376,97 @@ def normalize_capital_change(change: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def normalize_senior_manager_change(change: Dict[str, Any], is_after: bool = False) -> Dict[str, Any]:
+    """高级管理人员备案 SENIOR_MANAGER 事项归一化。
+    beforeChange：name + position。
+    afterChange：name + position + 可选 phone / idCardFrontUrl / idCardBackUrl。
+    """
+    result: Dict[str, Any] = {}
+    for field in ("name", "position"):
+        val = change.get(field)
+        if val not in (None, ""):
+            result[field] = val
+
+    if is_after:
+        for field in ("phone", "idCardFrontUrl", "idCardBackUrl"):
+            val = change.get(field)
+            if val not in (None, ""):
+                result[field] = val
+
+    return result
+
+
+def normalize_liaison_change(change: Dict[str, Any]) -> Dict[str, Any]:
+    """登记联络员备案 LIAISON 事项归一化（仅 afterChange）。"""
+    result: Dict[str, Any] = {}
+    for field in ("name", "phone", "email", "address", "idCardFrontUrl", "idCardBackUrl"):
+        val = change.get(field)
+        if val not in (None, ""):
+            result[field] = val
+    return result
+
+
+def normalize_bylaw_article_change(change: Dict[str, Any]) -> Dict[str, Any]:
+    """章程备案时间 BYLAW_ARTICLE 事项归一化（仅 afterChange）。"""
+    amendment_date = change.get("amendmentDate")
+    if amendment_date not in (None, ""):
+        return {"amendmentDate": amendment_date}
+    raw_value = first_non_empty_value(change)
+    return {"amendmentDate": raw_value} if raw_value not in (None, "") else {}
+
+
+def normalize_supervisor_change(change: Dict[str, Any]) -> Dict[str, Any]:
+    """监事备案 SUPERVISOR 事项归一化（仅 afterChange）。"""
+    has_supervisor = change.get("hasSupervisor")
+    if has_supervisor is False:
+        return {"hasSupervisor": False}
+    result: Dict[str, Any] = {"hasSupervisor": True}
+    for field in ("name", "phone", "idCardFrontUrl", "idCardBackUrl"):
+        val = change.get(field)
+        if val not in (None, ""):
+            result[field] = val
+    return result
+
+
 def normalize_change_payload(item_name: str, change: Any, is_after: bool = False) -> Any:
     if not isinstance(change, dict):
         return change
 
+    # v2.8: 通用可选字段 bylawFilingDate（除 LEGAL 外所有事项 afterChange 可含）
+    bylaw_filing_date = change.get("bylawFilingDate") if is_after and item_name != "LEGAL" else None
+
     if item_name == "NAME":
-        return normalize_name_change(change)
-    if item_name == "LEGAL":
-        return normalize_legal_change(change, is_after=is_after)
-    if item_name == "SCOPE":
-        return normalize_text_change(change, "scope")
-    if item_name == "ADDR":
-        return normalize_text_change(change, "address")
-    if item_name == "PERIOD":
-        return normalize_period_change(change)
-    if item_name == "CAPITAL":
-        return normalize_capital_change(change)
-    if item_name == "EQUITY":
-        return normalize_equity_change(change, is_after=is_after)
-    if item_name == "POSITION":
-        return normalize_position_change(change, is_after=is_after)
-    return change
+        result = normalize_name_change(change)
+    elif item_name == "LEGAL":
+        result = normalize_legal_change(change, is_after=is_after)
+    elif item_name == "SCOPE":
+        result = normalize_text_change(change, "scope")
+    elif item_name == "ADDR":
+        result = normalize_text_change(change, "address")
+    elif item_name == "PERIOD":
+        result = normalize_period_change(change)
+    elif item_name == "CAPITAL":
+        result = normalize_capital_change(change, is_after=is_after)
+    elif item_name == "EQUITY":
+        result = normalize_equity_change(change, is_after=is_after)
+    elif item_name == "POSITION":
+        result = normalize_position_change(change, is_after=is_after)
+    elif item_name == "SENIOR_MANAGER":
+        result = normalize_senior_manager_change(change, is_after=is_after)
+    elif item_name == "LIAISON":
+        result = normalize_liaison_change(change)
+    elif item_name == "BYLAW_ARTICLE":
+        result = normalize_bylaw_article_change(change)
+    elif item_name == "SUPERVISOR":
+        result = normalize_supervisor_change(change)
+    else:
+        result = change
+
+    # 追加 bylawFilingDate
+    if bylaw_filing_date not in (None, "") and isinstance(result, dict):
+        result["bylawFilingDate"] = bylaw_filing_date
+
+    return result
 
 
 def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
@@ -385,7 +474,8 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     for key in [
         "enterpriseName", "creditCode", "objectType",
         "matterType", "orderType", "orderStatus",
-        "wechatMappingKey"
+        "wechatMappingKey", "customerId", "agentId",
+        "relatedAttachments"
     ]:
         value = work_order.get(key)
         if value not in (None, ""):

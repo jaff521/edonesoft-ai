@@ -120,12 +120,13 @@ metadata: {
 | objectType | ❌ | 对象类型，默认空 |
 | orderType | ❌ | 工单类型，默认空 |
 | orderStatus | ❌ | 工单状态，默认空（开放接口新增默认为 `CONFIRM_BY_C`） |
+| customerId | ❌ | 关联客户 ID（v3.0 新增），传入后服务端可自动加载客户绑定的经办人 |
 | wechatMappingKey | ❌ | 微信路由凭证键（可选，若传入 sessionKey 则程序会自动将其作为 wechatMappingKey 注入，不需人工传值） |
 
 #### itemList 变更登记事项列表（数组）
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| itemName | ✅ | 事项名称代码，如：`ADDR`、`LEGAL`、`CAPITAL`、`SCOPE`、`NAME`、`EQUITY`、`PERIOD`、`POSITION` |
+| itemName | ✅ | 事项名称代码，如：`ADDR`、`LEGAL`、`CAPITAL`、`SCOPE`、`NAME`、`EQUITY`、`PERIOD`、`POSITION`、`SENIOR_MANAGER`、`LIAISON`、`BYLAW_ARTICLE`、`SUPERVISOR` |
 | beforeChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构，如 `CAPITAL.amount` 单位为元、`EQUITY.ratio` 为 0~1 小数 |
 | afterChange | ✅ | 必须严格使用第 7 节定义的 JSON 结构 |
 
@@ -137,23 +138,39 @@ metadata: {
 - 企业名称变更 → `matterType: "CHANGE"`，`itemName: "NAME"`
 - 股东/股权变更 → `matterType: "CHANGE"`，`itemName: "EQUITY"`
 - 职务变更 → `matterType: "CHANGE"`，`itemName: "POSITION"`
+- 高级管理人员备案 → `matterType: "CHANGE"`，`itemName: "SENIOR_MANAGER"`
+- 登记联络员备案 → `matterType: "CHANGE"`，`itemName: "LIAISON"`
+- 章程备案时间 → `matterType: "CHANGE"`，`itemName: "BYLAW_ARTICLE"`
+- 监事备案 → `matterType: "CHANGE"`，`itemName: "SUPERVISOR"`
 
 ### 事项 JSON 结构要求
-- `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "shareholders": [{"name": "张三", "amount": 2500000, "ratio": 0.50}]}`
+- `CAPITAL`：`{"amount": 5000000, "currency": "CNY", "shareholders": [{"name": "张三", "amount": 2500000, "ratio": 0.50, "subscriptionStartDate": "2024-01-15", "subscriptionContributionDate": "2034-01-14"}]}`，其中 `subscriptionStartDate`/`subscriptionContributionDate` 仅 afterChange（v2.8 新增）
 - `SCOPE`：`{"scope": "经营范围全文"}`
 - `ADDR`：`{"address": "完整经营地址"}`
 - `NAME`：`{"name": "企业名称"}`
 - `LEGAL`（⚠️ 注意 before / after 结构不同）：
   - `beforeChange`（原法人，仅姓名）：`{"name": "张三"}`
   - `afterChange`（新法人）：`{"name": "李四", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}`
-  - `phone`、`idCardFrontUrl`、`idCardBackUrl` 在法定代表人变更场景为**业务必填字段**，须由上层 Skill（ic-legal-assistant）在建单前收集完毕
-  - v2.6 新增：`needSupervisor`（boolean）+ `supervisor`（对象，含 `name`/`phone`/`idCardFrontUrl`/`idCardBackUrl`），仅 afterChange，当 `needSupervisor=true` 时须填写
+  - `phone`、`idCardFrontUrl`、`idCardBackUrl` 在法定代表人变更场景为**业务必填字段**，须由上层 Skill（ic-assistant）在建单前收集完毕
+  - v2.9 新增：`needLiaison`（boolean）+ `liaison`（对象，含 `name`/`phone`/`email`/`address`/`idCardFrontUrl`/`idCardBackUrl`），仅 afterChange，当 `needLiaison=true` 时须填写
+  - 注：监事已拆分为独立事项类型 `SUPERVISOR`，不再内嵌在 LEGAL 中
 - `POSITION`（⚠️ 注意 before / after 结构不同，v2.5 新增）：
   - `beforeChange`：`{"name": "张三", "position": "总经理"}`
   - `afterChange`：`{"name": "李四", "position": "副总经理", "phone": "13800138000", "idCardFrontUrl": "https://...", "idCardBackUrl": "https://..."}`
   - `phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 afterChange，均为可选字段
+- `SENIOR_MANAGER`（高级管理人员备案，结构同 POSITION）：
+  - `beforeChange`：`{"name": "张三", "position": "财务负责人"}`
+  - `afterChange`：`{"name": "李四", "position": "经理", "phone": "138...", "idCardFrontUrl": "...", "idCardBackUrl": "..."}`
+- `LIAISON`（登记联络员备案，仅 afterChange）：`{"name": "联络员", "phone": "138...", "email": "...", "address": "...", "idCardFrontUrl": "...", "idCardBackUrl": "..."}`
+- `BYLAW_ARTICLE`（章程备案时间，仅 afterChange）：`{"amendmentDate": "2026-06-18"}`
+- `SUPERVISOR`（监事备案，仅 afterChange）：
+  - 不设监事：`{"hasSupervisor": false}`
+  - 设置监事：`{"hasSupervisor": true, "name": "...", "phone": "...", "idCardFrontUrl": "...", "idCardBackUrl": "..."}`
 - `PERIOD`：固定期限传 `{"type": "fixed", "date": "2030-12-31"}`，长期传 `{"type": "forever"}`
 - `EQUITY`：`{"shareholders":[{"name":"王五","amount":2550000,"ratio":0.51,"phone":"138...","certType":"ID_CARD","certNumber":"310101...","certFrontUrl":"https://...","certBackUrl":"https://...","subscriptionStartDate":"2026-01-01","subscriptionContributionDate":"2030-12-31"}]}`。证件字段均为可选，`certType` 取值：`ID_CARD`（身份证）、`BUSINESS_LICENSE`（营业执照）、`PASSPORT`（护照）。`subscriptionStartDate`/`subscriptionContributionDate` 仅 afterChange（v2.5 新增）。afterChange 还可含 `equityTransfers`（股权转让列表）、`enterpriseType`（变更后企业类型）、`needSupervisor`+`supervisor`（监事信息，v2.6 新增）
+
+> [!NOTE]
+> **通用可选字段 `bylawFilingDate`**（v2.8 新增）：除 LEGAL 外所有事项的 `afterChange` 可包含 `bylawFilingDate`（章程备案时间，格式 `YYYY-MM-DD`），下发 RPA 时转换为独立的 `articles_amendment` 变更项。
 
 ---
 
