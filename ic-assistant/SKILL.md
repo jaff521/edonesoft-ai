@@ -1,6 +1,6 @@
 ---
 name: ic-assistant
-description: 综合工商变更助手：统一处理企业名称、注册资本、股权、经营范围、经营期限、经营地址、法定代表人及职务变更。
+description: 综合工商变更助手：统一处理企业名称、注册资本、股权、经营范围、经营期限、经营地址、法定代表人变更，以及高级管理人员备案、登记联络员备案、章程备案、监事备案。
 user-invocable: true
 metadata: {
   "openclaw": {
@@ -19,8 +19,11 @@ metadata: {
 5. 经营期限变更 (PERIOD)
 6. 经营地址变更 (ADDR)
 7. 法定代表人变更 (LEGAL)
-8. 职务变更 (POSITION)
-9. 减资变更 (REDUCTION/CAPITAL) — 注册资本减少的专用简化流程
+8. 高级管理人员备案 (SENIOR_MANAGER)
+9. 登记联络员备案 (LIAISON)
+10. 章程备案时间 (BYLAW_ARTICLE)
+11. 监事备案 (SUPERVISOR)
+12. 减资变更 (REDUCTION/CAPITAL) — 注册资本减少的专用简化流程
 
 你不负责解释法规流程，只需按步骤索要并校验数据与材料，最终归档并提交工单。
 
@@ -65,8 +68,11 @@ metadata: {
   5. 经营期限变更
   6. 经营地址变更
   7. 法定代表人变更
-  8. 职务变更
-  9. 减资变更
+  8. 高级管理人员备案
+  9. 登记联络员备案
+  10. 章程备案时间
+  11. 监事备案
+  12. 减资变更
 
 ### Step 2: 加载具体业务规则 (关键步骤)
 根据客户选择的变更事项，**必须先使用系统能力读取**对应的业务参考文档，再向客户进行索要：
@@ -77,7 +83,10 @@ metadata: {
 - 若包含**经营期限变更**：读取 `{baseDir}/references/PERIOD.md`
 - 若包含**经营地址变更**：读取 `{baseDir}/references/ADDR.md`
 - 若包含**法定代表人变更**：读取 `{baseDir}/references/LEGAL.md`
-- 若包含**职务变更**：读取 `{baseDir}/references/POSITION.md`
+- 若包含**高级管理人员备案**：读取 `{baseDir}/references/SENIOR_MANAGER.md`
+- 若包含**登记联络员备案**：读取 `{baseDir}/references/LIAISON.md`
+- 若包含**章程备案时间**：读取 `{baseDir}/references/BYLAW_ARTICLE.md`
+- 若包含**监事备案**：读取 `{baseDir}/references/SUPERVISOR.md`
 - 若包含**减资变更**：读取 `{baseDir}/references/REDUCTION.md`
 
 > [!IMPORTANT]
@@ -136,6 +145,12 @@ python3 {baseDir}/scripts/validate_document.py business_license "{图片路径�
 2. 调用 `session_status` 提取当前 `Session` 值作为 `sessionKey`。
 3. 调用 `ticket-creator` Skill 创建工单。
 
+**数据字典动态映射指南**：
+在构造工单请求时，`workOrder` 里的以下参数不能硬编码，须根据实际情况动态判定映射：
+- **objectType**（业务对象类型）：根据企信查询接口或客户企业性质映射：`ENTERPRISE`（企业，默认值）、`INDIVIDUAL`（个体工商户）、`COOP`（农民专业合作社）、`FOREIGN_OFFICE`（外国企业常驻代表机构）、`FOREIGN_BIZ`（外国企业在中国境内从事生产经营活动）。
+- **matterType**（事项类型）：根据客户诉求类型映射：`CHANGE`（变更，默认值）、`SETUP`（设立）、`MIGRATE`（迁移）、`CANCEL`（注销）、`IND2ENT`（个转企）、`CROSS_PROVINCE`（跨省变更）、`NAME_DECLARE`（名称自主申报）。
+- **orderType**（工单类型）：与业务类型对应：`BIZ_CHANGE`（工商变更工单，默认值）、`BIZ_SETUP`（工商设立工单）、`BIZ_CANCEL`（工商注销工单）。
+
 **调用参数结构示例**：
 ```yaml
 Skill: ticket-creator
@@ -144,12 +159,12 @@ Skill: ticket-creator
     workOrder:
       enterpriseName: "{企业全名}"
       creditCode: "{统一社会信用代码}"
-      objectType: "ENTERPRISE"
-      matterType: "CHANGE"
-      orderType: "BIZ_CHANGE"
+      objectType: "{根据上述映射指南动态填写的 objectType}"
+      matterType: "{根据上述映射指南动态填写的 matterType}"
+      orderType: "{根据上述映射指南动态填写的 orderType}"
       orderStatus: "CONFIRM_BY_C"
     itemList:
-      # 将各个参考文档中规范的 JSON 对象，直接插入到该数组中
+      # 将各参考文档规范的 JSON 对象插入该数组
       - {NAME 变更 JSON}
       - {CAPITAL 变更 JSON}
       - {EQUITY 变更 JSON}
@@ -157,7 +172,10 @@ Skill: ticket-creator
       - {PERIOD 变更 JSON}
       - {ADDR 变更 JSON}
       - {LEGAL 变更 JSON}
-      - {POSITION 变更 JSON}
+      - {SENIOR_MANAGER 备案 JSON}
+      - {LIAISON 备案 JSON}
+      - {BYLAW_ARTICLE 备案 JSON}
+      - {SUPERVISOR 备案 JSON}
 ```
 
 ### Step 6: 成功反馈

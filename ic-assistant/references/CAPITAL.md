@@ -7,6 +7,7 @@
 - **原股东出资明细**：从企业查询结果中获取各股东姓名、出资额、持股比例。
 - **目标注册资本**：询问客户变更后的目标注册资本金额。
 - **币种**：默认为 `CNY`（人民币），如需其他币种（`USD`/`EUR`/`HKD`/`JPY`）请客户明确。
+- **认缴时间**（可选）：可根据实际情况收集股东的认缴开始时间（`subscriptionStartDate`）和认缴出资时间（`subscriptionContributionDate`），格式需符合 `YYYY-MM-DD`。
 
 ### 2. 自动配平计算
 - 新股东出资额 = 新注册资本总额 × 原股东占比
@@ -34,8 +35,15 @@
     "amount": "{目标资本额_元单位}",
     "currency": "CNY",
     "shareholders": [
-      { "name": "{股东1}", "amount": "{自动折算的新出资额_元}", "ratio": "{原持股比例_0至1}" }
+      { 
+        "name": "{股东1}", 
+        "amount": "{自动折算的新出资额_元}", 
+        "ratio": "{原持股比例_0至1}",
+        "subscriptionStartDate": "{认缴开始时间 YYYY-MM-DD（可选）}",
+        "subscriptionContributionDate": "{认缴出资时间 YYYY-MM-DD（可选）}"
+      }
     ]
   }
 }
 ```
+

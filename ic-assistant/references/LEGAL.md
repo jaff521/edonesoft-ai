@@ -11,11 +11,10 @@
 | 新法定代表人手机号 | ✅ 必填 |
 | 身份证正面照片（人像面） | ✅ 必填 |
 | 身份证反面照片（国徽面） | ✅ 必填 |
-| 是否需要设置监事 | ❌ 可选（询问客户） |
-| 监事姓名 | ⚠️ 条件必填（needSupervisor=true 时） |
-| 监事手机号 | ❌ 可选 |
-| 监事身份证正面照片 | ❌ 可选 |
-| 监事身份证反面照片 | ❌ 可选 |
+
+
+> [!NOTE]
+> 监事备案与登记联络员备案已拆分为独立事项类型（SUPERVISOR、LIAISON），不再内嵌在 LEGAL 中。若客户在法人变更时还需办理监事备案或联络员备案，请引导其另行勾选独立的“监事备案”或“登记联络员备案”事项。
 
 ### 2. 证件核验
 收到身份证照片后，按主控 SKILL.md Step 3.1 的通用流程处理：
@@ -34,12 +33,6 @@ OCR 验证通过后，调用 `oss-uploader` Skill 将正反面图片分别上传
 ### 4. 身份证号提取
 从 OCR 结果的 `extracted.id_number` 字段中提取身份证号码，可作为辅助信息向客户展示确认。
 
-### 5. 监事信息收集（可选）
-如客户表示需要设置监事（`needSupervisor=true`），还需收集：
-- 监事姓名（必填）
-- 监事手机号（可选）
-- 监事身份证正反面照片（可选，流程同 Step 2-3）
-
 ## 字段结构规范
 ```json
 {
@@ -51,14 +44,8 @@ OCR 验证通过后，调用 `oss-uploader` Skill 将正反面图片分别上传
     "name": "{新法定代表人姓名}",
     "phone": "{新法人手机号（必填）}",
     "idCardFrontUrl": "{新法人身份证正面 OSS URL（必填）}",
-    "idCardBackUrl": "{新法人身份证反面 OSS URL（必填）}",
-    "needSupervisor": "{是否需要监事，boolean（可选）}",
-    "supervisor": {
-      "name": "{监事姓名（needSupervisor=true 时必填）}",
-      "phone": "{监事手机号（可选）}",
-      "idCardFrontUrl": "{监事身份证正面 OSS URL（可选）}",
-      "idCardBackUrl": "{监事身份证反面 OSS URL（可选）}"
-    }
+    "idCardBackUrl": "{新法人身份证反面 OSS URL（必填）}"
   }
 }
 ```
+
