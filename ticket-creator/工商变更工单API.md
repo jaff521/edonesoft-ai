@@ -1,9 +1,68 @@
 # 工商变更工单模块 — 外部系统对接参考文档
 
-> **文档版本**：v2.7  
-> **更新日期**：2026-06-17  
+> **文档版本**：v3.1  
+> **更新日期**：2026-06-25  
 > **适用模块**：工单管理（前端路由 `/bizorder/workOrder`）  
 > **数据来源**：数据库字典（`sys_dict` / `sys_dict_item`）、后端实体与开放接口、前端事项 JSON 表单组件
+
+---
+
+## 目录
+
+- [1. 概述](#1-概述)
+- [2. 鉴权方式](#2-鉴权方式)
+  - [2.1 错误响应](#21-错误响应)
+- [3. 接口基础信息](#3-接口基础信息)
+- [4. 开放接口清单（工单）](#4-开放接口清单)
+  - [4.1 列表查询参数](#41-列表查询参数)
+  - [4.2 统一成功响应格式](#42-统一成功响应格式)
+- [5. 数据模型](#5-数据模型)
+  - [5.1 聚合对象 WorkOrderPage](#51-聚合对象-workorderpage)
+  - [5.2 工单主表](#52-工单主表-workorderbiz_work_order)
+  - [5.4 工单编号规则](#54-工单编号规则)
+  - [5.5 事项明细](#55-事项明细-itemlistbiz_order_item)
+  - [5.6 相关附件](#56-相关附件-relatedattachments)
+- [6. 字典与枚举](#6-字典与枚举)
+  - [6.1 工单状态](#61-工单状态-biz_order_status)
+  - [6.2 状态流转规则](#62-工单状态流转规则)
+  - [6.3 对象类型](#63-对象类型-biz_object_type)
+  - [6.4 事项类型](#64-事项类型-biz_matter_type)
+  - [6.5 工单类型](#65-工单类型-biz_order_type)
+  - [6.6 事项名称](#66-事项名称-biz_item_name)
+- [7. 事项明细 JSON 字段规范](#7-事项明细-json-字段规范重点)
+  - [7.1 企业名称 NAME](#71-企业名称-name)
+  - [7.2 法定代表人 LEGAL](#72-法定代表人-legal)
+  - [7.3 高级管理人员备案 SENIOR_MANAGER](#73-高级管理人员备案-senior_manager)
+  - [7.4 登记联络员备案 LIAISON](#74-登记联络员备案-liaison)
+  - [7.5 章程备案时间 BYLAW_ARTICLE](#75-章程备案时间-bylaw_article)
+  - [7.6 监事备案 SUPERVISOR](#76-监事备案-supervisor)
+  - [7.7 注册资本 CAPITAL](#77-注册资本-capital)
+  - [7.8 经营范围 SCOPE](#78-经营范围-scope)
+  - [7.9 经营地址 ADDR](#79-经营地址-addr)
+  - [7.10 经营期限 PERIOD](#710-经营期限-period)
+  - [7.11 股权 EQUITY](#711-股权-equity)
+  - [7.12 未识别事项类型（兜底）](#712-未识别事项类型兜底)
+- [8. 完整对接示例](#8-完整对接示例)
+  - [8.1 新增工单](#81-新增工单)
+  - [8.2 查询详情](#82-查询详情)
+  - [8.3 状态流转](#83-状态流转)
+- [9. 编辑行为说明](#9-编辑行为说明)
+- [10. 校验与注意事项](#10-校验与注意事项)
+- [11. 附录](#11-附录数据库表与字典-sql-来源)
+- [12. 变更记录](#12-变更记录)
+- [13. 客户信息 OpenAPI](#13-客户信息-openapi)
+  - [13.1 接口清单](#131-接口清单)
+  - [13.2 客户信息字段](#132-客户信息字段-bizcustomerinfo)
+  - [13.3 典型对接流程](#133-典型对接流程推荐)
+  - [13.4 findOrCreate](#134-findorcreate--查找或创建客户核心接口)
+  - [13.5 edit](#135-edit--按-id-更新客户信息)
+- [14. 发票记录 OpenAPI](#14-发票记录-openapi)
+  - [14.1 接口清单](#141-接口清单)
+  - [14.2 发票信息字段](#142-发票信息字段-bizinvoiceinfo)
+  - [14.3 发票明细字段](#143-发票明细字段-bizinvoicedetail)
+- [15. 经营范围 OpenAPI](#15-经营范围-openapi)
+  - [15.1 接口清单](#151-接口清单)
+  - [15.2 返回字段](#152-返回字段-bizbusinessscope)
 
 ---
 
@@ -74,7 +133,8 @@
 | POST | `/add` | 新增工单（聚合写入） |
 | PUT | `/edit` | 编辑工单（主单更新 + 子表全量替换） |
 | POST | `/transit?id={id}&targetStatus={status}` | 状态流转（受状态机约束） |
-| POST | `/confirmEquityChange` | 股权变更确认（含转让明细+企业类型，CONFIRM_BY_A→PENDING） |
+
+> **注意**：股权变更确认接口 `/bizorder/workOrder/confirmEquityChange` 为**后台管理端内部接口**（需登录权限），不在开放接口范围内。外部系统如需写入股权转让明细和变更后企业类型，请通过 `/edit` 接口更新 EQUITY 事项的 `afterChange` 字段。
 
 ### 4.1 列表查询参数
 
@@ -114,9 +174,13 @@
 ```json
 {
   "workOrder": { },
-  "itemList": [ ]
+  "itemList": [ ],
+  "agent": { },
+  "workOrderLogs": [ ]
 }
 ```
+
+> `agent` 为经办人信息，`workOrderLogs` 为操作日志列表，均为查询响应中的可选字段。新增/编辑时只需传 `workOrder` + `itemList`。
 
 ### 5.2 工单主表 workOrder（biz_work_order）
 
@@ -133,6 +197,12 @@
 | agentId | string | 否 | 经办人 ID，关联 `biz_agent` 表 |
 | currentSessionId | string | 否 | 当前办理会话 ID（RPA 标记） |
 | wechatMappingKey | string | 否 | 微信路由唯一凭证 Key，格式 `{robot_wxid}:{chat_type}:{target_wxid}`；仅微信群聊渠道发起的工单有此值，后台手动创建的工单为 `null` |
+| customerId | string | 否 | 关联客户 ID，关联 `biz_customer_info` 表（v3.0 新增）。传入后服务端可自动加载客户绑定的经办人 |
+| agent | object | — | 经办人信息（仅查询响应，查询时按 `agentId` 自动填充） |
+| rpaAgentId | string | 否 | 执行该工单的 RPA ID（Phase2 RPA 任务调度） |
+| rpaTaskStatus | string | 否 | RPA 执行状态，取值：`running` / `qrcode_waiting` / `done` / `failed` |
+| rpaErrorMsg | string | 否 | RPA 执行错误信息 |
+| relatedAttachments | string | 否 | 相关附件 JSON，结构见 5.6 节（股东会决议 / 章程修正案 / 减资公告 / 股东名册） |
 | createTime | datetime | — | 创建时间，格式 `yyyy-MM-dd HH:mm:ss` |
 | updateTime | datetime | — | 更新时间 |
 
@@ -154,8 +224,40 @@
 | itemName | string | **是** | 事项名称，字典 `biz_item_name` 的 **item_value** |
 | beforeChange | object / null | 否 | 变更前 JSON 对象 |
 | afterChange | object / null | 否 | 变更后 JSON 对象 |
+| rpaExecStatus | string | 否 | RPA 执行状态（仅查询响应），取值：`PENDING` / `RUNNING` / `DONE` / `FAILED` |
+| rpaExecMessage | string | 否 | RPA 执行信息（失败原因等，仅查询响应） |
 
 > **重要**：`beforeChange`、`afterChange` 在 API 中为 **JSON 对象**，不是字符串。空数据请传 `null`，不要传 `{}` 或全空占位对象。
+
+### 5.6 相关附件 relatedAttachments
+
+`relatedAttachments` 为 JSON 字符串（存储时序列化），结构如下：
+
+```json
+{
+  "shareholderResolution": [
+    { "name": "股东会决议.pdf", "url": "https://example.com/files/xxx.pdf" }
+  ],
+  "articlesAmendment": [
+    { "name": "章程修正案.pdf", "url": "https://example.com/files/yyy.pdf" }
+  ],
+  "capitalReductionNotice": [
+    { "name": "减资公告.pdf", "url": "https://example.com/files/zzz.pdf" }
+  ],
+  "shareholderRoster": [
+    { "name": "股东名册.xlsx", "url": "https://example.com/files/www.xlsx" }
+  ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| shareholderResolution | array | 股东会决议文件列表（可选） |
+| articlesAmendment | array | 章程修正案文件列表（可选） |
+| capitalReductionNotice | array | 减资公告文件列表（可选） |
+| shareholderRoster | array | 股东名册文件列表（可选） |
+
+每个文件对象包含 `name`（文件名）和 `url`（文件下载地址）。
 
 ---
 
@@ -172,10 +274,13 @@
 |-------------------|-------------------|------|
 | 待客户确认 | CONFIRM_BY_C | 开放接口新增默认状态，等待客户在 H5 确认 |
 | 待经办人确认 | CONFIRM_BY_A | 客户确认后进入，等待后台经办人确认 |
-| 待提交 | PENDING | 经办人确认后进入，等待填报 |
+| 待提交 | PENDING | 经办人确认后进入，等待填报或下发 RPA |
 | 暂存 | DRAFT | 草稿 |
 | 取消/终止办理 | CANCEL | 终止该工单，不可再流转 |
-| 办理中 | PROCESSING | 正在办理 |
+| 已下发RPA | DISPATCHED | 工单已派发给 RPA，等待机器处理（v3.1） |
+| RPA执行中 | RUNNING | RPA 正在办理中（v3.1） |
+| RPA执行完成待确认 | WAIT_CONFIRM | RPA 执行完成，待经办人确认结果（v3.1） |
+| 办理中 | PROCESSING | 人工正在办理 |
 | 已办结 | DONE | 终态 |
 
 ### 6.2 工单状态流转规则
@@ -185,8 +290,11 @@
 ```
 CONFIRM_BY_C → CONFIRM_BY_A          （客户 H5 确认）
 CONFIRM_BY_A → PENDING               （后台经办人确认）
-PENDING      → DRAFT, CANCEL
+PENDING      → DISPATCHED, DRAFT, CANCEL
 DRAFT        → PROCESSING, CANCEL, DRAFT
+DISPATCHED   → RUNNING, PENDING      （RPA 拾取执行 / 退回）
+RUNNING      → WAIT_CONFIRM, DONE, PENDING  （RPA 完成 / 退回）
+WAIT_CONFIRM → DONE                  （经办人确认 RPA 结果）
 CANCEL       → （不可再流转）
 PROCESSING   → DONE
 DONE         → （不可再流转）
@@ -194,7 +302,8 @@ DONE         → （不可再流转）
 
 > `CONFIRM_BY_C → CONFIRM_BY_A` 由 H5 的「确认资料无误」按钮触发（接口 `/bizorder/workOrder/confirmByCustomer`，免鉴权），非 `/transit` 接口。
 > `CONFIRM_BY_A → PENDING` 由后台管理端「经办人确认」按钮触发（接口 `/bizorder/workOrder/confirmByAgent`，需权限 `bizorder:workOrder:edit`）。**确认前会校验工单是否已关联经办人，若未关联则需先选择经办人。**
-> 若工单包含 **股权变更（EQUITY）** 事项，确认时会弹出股权变更确认弹窗，需填写**股权转让明细**和**变更后企业类型**，提交后调用 `/bizorder/workOrder/confirmEquityChange` 接口（v2.4 新增）。
+> `PENDING → DISPATCHED` / `DISPATCHED → RUNNING` 等 RPA 相关流转由 RPA 系统调度触发，接入方通常无需手动调用。
+> 若工单包含 **股权变更（EQUITY）** 事项，经办人确认时会弹出股权变更确认弹窗，需填写**股权转让明细**和**变更后企业类型**，提交后调用内部接口 `/bizorder/workOrder/confirmEquityChange`（需后台管理端权限，非开放接口）。
 
 非法流转将返回业务异常，如：`工单状态不允许从 PENDING 流转到 DONE`。
 
@@ -241,7 +350,10 @@ DONE         → （不可再流转）
 | 经营期限 | PERIOD | 期限类型 + 到期日 |
 | 经营地址 | ADDR | 多行文本 `address` |
 | 法定代表人 | LEGAL | 单字段 `name`（变更后额外含手机号、身份证） |
-| 职务 | POSITION | 姓名 + 职务（变更后额外含电话号码） |
+| 高级管理人员备案 | SENIOR_MANAGER | 姓名 + 职务（变更后额外含手机号、身份证） |
+| 登记联络员备案 | LIAISON | 仅变更后，姓名/手机号/邮箱/住址/身份证 |
+| 章程备案时间 | BYLAW_ARTICLE | 仅变更后，单个日期 |
+| 监事备案 | SUPERVISOR | 仅变更后，开关 + 监事信息 |
 
 ---
 
@@ -291,69 +403,81 @@ DONE         → （不可再流转）
 | phone | string | 否（仅 afterChange） | 新法定代表人手机号 |
 | idCardFrontUrl | string | 否（仅 afterChange） | 新法定代表人身份证正面图片 URL |
 | idCardBackUrl | string | 否（仅 afterChange） | 新法定代表人身份证反面图片 URL |
-| needSupervisor | boolean | 否（仅 afterChange） | 是否需要设置一名监事，v2.6 新增 |
-| supervisor | object | 否（仅 afterChange，needSupervisor=true 时必填） | 监事信息对象，v2.6 新增 |
-| supervisor.name | string | 是(若有该对象) | 监事姓名 |
-| supervisor.phone | string | 否 | 监事手机号 |
-| supervisor.idCardFrontUrl | string | 否 | 监事身份证正面图片 URL |
-| supervisor.idCardBackUrl | string | 否 | 监事身份证反面图片 URL |
 
-> **约定**：`beforeChange` 仅保留变更前的姓名。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（新法定代表人信息），均为可选字段。`needSupervisor` 和 `supervisor` 仅用于 `afterChange`，当 `needSupervisor=true` 时需填写监事信息。
+> **约定**：`beforeChange` 仅保留变更前的姓名。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`。监事备案、登记联络员备案已拆分为独立事项类型（SUPERVISOR、LIAISON），不再内嵌在 LEGAL 中。如需设置监事，请在 `itemList` 中单独添加 `itemName: "SUPERVISOR"` 的事项。
 
-**LEGAL afterChange 含监事的完整示例：**
-
-```json
-{
-  "name": "李四",
-  "phone": "13800138000",
-  "idCardFrontUrl": "https://example.com/files/legal_idcard_front.jpg",
-  "idCardBackUrl": "https://example.com/files/legal_idcard_back.jpg",
-  "needSupervisor": true,
-  "supervisor": {
-    "name": "王五",
-    "phone": "13900139000",
-    "idCardFrontUrl": "https://example.com/files/sup_front.jpg",
-    "idCardBackUrl": "https://example.com/files/sup_back.jpg"
-  }
-}
-```
-
-### 7.3 职务 POSITION
+### 7.3 高级管理人员备案 SENIOR_MANAGER
 
 **变更前（beforeChange）** — 姓名 + 职务：
 
 ```json
-{
-  "name": "张三",
-  "position": "总经理"
-}
+{ "name": "张三", "position": "财务负责人" }
 ```
 
-**变更后（afterChange）** — 姓名 + 职务 + 电话号码：
+**变更后（afterChange）** — 姓名 + 职务 + 手机号 + 身份证：
 
 ```json
-{
-  "name": "李四",
-  "position": "副总经理",
-  "phone": "13800138000",
-  "idCardFrontUrl": "https://example.com/files/pos_front.jpg",
-  "idCardBackUrl": "https://example.com/files/pos_back.jpg"
-}
+{ "name": "李四", "position": "经理", "phone": "13800138000", "idCardFrontUrl": "...", "idCardBackUrl": "..." }
 ```
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | name | string | **是** | 人员姓名 |
-| position | string | **是** | 职务名称 |
-| phone | string | 否（仅 afterChange） | 变更后人员电话号码 |
-| idCardFrontUrl | string | 否（仅 afterChange） | 变更后人员身份证正面图片 URL，v2.6 新增 |
-| idCardBackUrl | string | 否（仅 afterChange） | 变更后人员身份证反面图片 URL，v2.6 新增 |
+| position | string | **是** | 职务类型：`财务负责人` / `经理` |
+| phone | string | 否（仅 afterChange） | 手机号 |
+| idCardFrontUrl | string | 否（仅 afterChange） | 身份证正面 URL |
+| idCardBackUrl | string | 否（仅 afterChange） | 身份证反面 URL |
 
-> **约定**：`beforeChange` 仅需姓名和职务。`phone`、`idCardFrontUrl`、`idCardBackUrl` 仅用于 `afterChange`（变更后新人员信息），均为可选字段。
+> RPA 下发时归入 `legal_rep.senior_managers`，字段 `position_type`。
 
-### 7.4 注册资本 CAPITAL
+### 7.4 登记联络员备案 LIAISON
 
-> beforeChange 与 afterChange 结构相同，分别表示变更前后的注册资本快照。
+> 仅变更后，新增时自动填法人信息。
+
+```json
+{ "name": "联络员", "phone": "138...", "email": "...", "address": "...", "idCardFrontUrl": "...", "idCardBackUrl": "..." }
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| name/phone/email/address/idCardFrontUrl/idCardBackUrl | — | — | 同上 |
+
+> RPA 下发时归入 `legal_rep.liaison` 对象。
+
+### 7.5 章程备案时间 BYLAW_ARTICLE
+
+> 仅变更后，单个日期。
+
+```json
+{ "amendmentDate": "2026-06-18" }
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| amendmentDate | string | **是** | 章程备案日期 `YYYY-MM-DD` |
+
+> RPA 下发时转为独立 `change_type: "articles_amendment"`，字段 `amendment_date`。
+
+### 7.6 监事备案 SUPERVISOR
+
+> 仅变更后。
+
+不设监事：`{ "hasSupervisor": false }`
+
+设置监事：`{ "hasSupervisor": true, "name": "...", "phone": "...", "idCardFrontUrl": "...", "idCardBackUrl": "..." }`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| hasSupervisor | boolean | **是** | 是否设置监事 |
+| name/phone/idCardFrontUrl/idCardBackUrl | — | hasSupervisor=true 时必填 | 监事信息 |
+
+> RPA 下发时为独立 `change_type: "supervisor"`，字段 `has_supervisor`。
+
+### 7.7 注册资本 CAPITAL
+
+> beforeChange 与 afterChange 结构基本一致，但 `afterChange` 的 shareholders 额外包含认缴日期字段。
+
+**变更后（afterChange）完整示例：**
 
 ```json
 {
@@ -363,12 +487,16 @@ DONE         → （不可再流转）
     {
       "name": "张三",
       "amount": 2500000,
-      "ratio": 0.50
+      "ratio": 0.50,
+      "subscriptionStartDate": "2024-01-15",
+      "subscriptionContributionDate": "2034-01-14"
     },
     {
       "name": "李四",
       "amount": 2500000,
-      "ratio": 0.50
+      "ratio": 0.50,
+      "subscriptionStartDate": "2024-01-15",
+      "subscriptionContributionDate": "2034-01-14"
     }
   ]
 }
@@ -382,12 +510,15 @@ DONE         → （不可再流转）
 | shareholders[].name | string | 是(若有该对象) | 股东姓名 / 企业名称 |
 | shareholders[].amount | number | 是(若有该对象) | 出资额，单位：**元** |
 | shareholders[].ratio | number | 是(若有该对象) | 出资比例，**0~1 小数**（如 0.50 表示 50%） |
+| shareholders[].subscriptionStartDate | string | 否（仅 afterChange） | 认缴开始时间，格式 `YYYY-MM-DD`，v2.8 新增 |
+| shareholders[].subscriptionContributionDate | string | 否（仅 afterChange） | 认缴出资时间，格式 `YYYY-MM-DD`，v2.8 新增 |
 
 **约定说明**：
 
 - `shareholders` 数组在 `beforeChange` 和 `afterChange` 中的语义不同：
   - **beforeChange**：用户手动填写，变更前各位股东的出资额和出资比例
   - **afterChange**：金额由前端自动根据 `beforeChange.shareholders` 的姓名和比例计算（`afterChange.shareholders[i].amount = afterChange.amount × beforeChange.shareholders[i].ratio`）。**对接方若直接调用 API 写入，需自行计算**
+  - `subscriptionStartDate`、`subscriptionContributionDate` 仅用于 `afterChange`，为可选字段
 - 所有股东 `ratio` 之和建议等于 `1`（100%）
 - 前端编辑表单按 **0~1 小数** 存储 `ratio`；展示时乘以 100 显示为百分数
 - 过滤掉 name、amount、ratio 均为空的股东行
@@ -402,7 +533,7 @@ DONE         → （不可再流转）
 | HKD | 港币 |
 | JPY | 日元 |
 
-### 7.5 经营范围 SCOPE
+### 7.8 经营范围 SCOPE
 
 > beforeChange 与 afterChange 结构相同，分别表示变更前后的经营范围。
 
@@ -416,7 +547,7 @@ DONE         → （不可再流转）
 |------|------|------|
 | scope | string | 经营范围全文，多条可用顿号或分号分隔 |
 
-### 7.6 经营地址 ADDR
+### 7.9 经营地址 ADDR
 
 > beforeChange 与 afterChange 结构相同，分别表示变更前后的经营地址。
 
@@ -430,7 +561,7 @@ DONE         → （不可再流转）
 |------|------|------|
 | address | string | 完整经营地址 |
 
-### 7.7 经营期限 PERIOD
+### 7.10 经营期限 PERIOD
 
 > beforeChange 与 afterChange 结构相同，分别表示变更前后的经营期限。
 
@@ -456,7 +587,7 @@ DONE         → （不可再流转）
 
 > 详情展示层还兼容别名：`periodType`、`endDate`、字符串直传日期等，**对接写入建议统一使用 `type` + `date`**。
 
-### 7.8 股权 EQUITY
+### 7.11 股权 EQUITY
 
 **变更前（beforeChange）** — 仅股东基本信息：
 
@@ -625,7 +756,7 @@ DONE         → （不可再流转）
 | 一人有限责任公司 |
 | 其他有限责任公司 |
 
-### 7.9 未识别事项类型（兜底）
+### 7.12 未识别事项类型（兜底）
 
 若 `itemName` 不在上述 8 种标准类型内，可传任意合法 JSON 对象，例如：
 
@@ -654,6 +785,7 @@ Content-Type: application/json
   "workOrder": {
     "enterpriseName": "上海星辰贸易有限公司",
     "creditCode": "91310000MA002B002X",
+    "customerId": "2050000000000009001",
     "objectType": "ENTERPRISE",
     "matterType": "CHANGE",
     "orderType": "BIZ_CHANGE"
@@ -763,7 +895,7 @@ X-Open-Token: <your-token>
 **请求**
 
 ```http
-POST /jeecg-boot/bizorder/openapi/workOrder/transit?id=2050000000000005002&targetStatus=SAVED
+POST /jeecg-boot/bizorder/openapi/workOrder/transit?id=2050000000000005002&targetStatus=DRAFT
 X-Open-Token: <your-token>
 ```
 
@@ -836,3 +968,260 @@ GET /jeecg-boot/sys/dict/getDictItems/biz_item_name
 | v2.5 | 2026-06-17 | 新增事项类型 POSITION（职务变更），包含 `name`、`position`、`phone` 字段（phone 仅 afterChange）；EQUITY `shareholders` 新增 `subscriptionStartDate`（认缴开始时间）、`subscriptionContributionDate`（认缴出资时间）字段（仅 afterChange） |
 | v2.6 | 2026-06-17 | LEGAL 事项 `afterChange` 新增 `needSupervisor`（是否需要监事）、`supervisor`（监事姓名/手机号/身份证正反面）字段；EQUITY 事项 `afterChange` 新增 `needSupervisor`、`supervisor` 字段；POSITION 事项 `afterChange` 新增 `idCardFrontUrl`、`idCardBackUrl`（身份证正反面）字段 |
 | v2.7 | 2026-06-17 | 文档完善：所有事项类型（NAME、LEGAL、POSITION、CAPITAL、SCOPE、ADDR、PERIOD、EQUITY）均补充了 `beforeChange` 结构说明或标注 "beforeChange 与 afterChange 结构相同"；EQUITY 新增变更前股东列表示例及独立字段表 |
+| v2.8 | 2026-06-18 | CAPITAL 事项 `afterChange.shareholders` 新增可选字段 `subscriptionStartDate`（认缴开始时间）、`subscriptionContributionDate`（认缴出资时间）；除 LEGAL 外所有事项 `afterChange` 新增通用可选字段 `bylawFilingDate`（章程备案时间），格式 `YYYY-MM-DD`，下发 RPA 时转换为独立的 `articles_amendment` 变更项；股权变更确认时企业类型改为非必填；股权转让 `transfer_type` 取值改为中文（购买/继承/赠予/司法判决/其他） |
+| v2.9 | 2026-06-18 | LEGAL 事项 `afterChange` 新增 `needLiaison`（是否需要登记联络员）、`liaison`（联络员姓名/手机号/邮箱/住址/身份证正反面）字段，开启后默认填充法人信息，下发 RPA 时包含在 `legal_rep` 的 `liaison` 字段中 |
+
+| v3.0 | 2026-06-25 | 新增客户信息 OpenAPI（/bizorder/openapi/customer/**）、发票记录 OpenAPI（/bizorder/openapi/invoice/**）、经营范围 OpenAPI（/bizorder/openapi/businessScope/**）；工单新增 `customerId` 字段关联客户，`agentId` 支持自动从客户绑定加载 |
+| v3.1 | 2026-06-25 | 文档完善：工单主表字段表补充 `customerId`、`rpaAgentId`、`rpaTaskStatus`、`rpaErrorMsg`、`relatedAttachments` 字段；事项明细补充 `rpaExecStatus`、`rpaExecMessage` 字段；工单状态字典补充 DISPATCHED / RUNNING / WAIT_CONFIRM 三个 RPA 状态；状态流转规则更新完整路径（含 RPA 阶段）；聚合对象 WorkOrderPage 补充 `agent`、`workOrderLogs` 字段；客户信息补充 6 个遗漏字段；移除开放接口清单中不存在于 OpenAPI Controller 的 `/confirmEquityChange` 端点（该接口为后台管理端内部接口）；新增 5.6 节 relatedAttachments JSON 结构说明；章节编号修正；客户 OpenAPI 新增 `/findOrCreate`（第三方对接核心接口，查不到自动创建）和 `/edit`（按ID更新）接口；新增 13.3 节第三方对接推荐流程 |
+
+---
+
+## 13. 客户信息 OpenAPI
+
+**Base URL**: `{host}/jeecg-boot/bizorder/openapi/customer`
+
+### 13.1 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/search?keyword=&limit=20` | 模糊搜索（名称+信用代码） |
+| GET | `/list?pageNo=&pageSize=&enterpriseName=` | 分页列表 |
+| GET | `/queryById?id=` | 按ID查单条 |
+| GET | `/getByCreditCode?creditCode=` | 按信用代码精确查 |
+| POST | `/save` | 新增/更新（按creditCode去重） |
+| POST | `/findOrCreate` | **推荐** 按名称+信用代码查找，不存在则自动创建（第三方对接核心接口） |
+| PUT | `/edit` | 按ID更新客户信息 |
+
+### 13.2 客户信息字段（BizCustomerInfo）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | string | 主键 |
+| enterpriseName | string | 企业名称 |
+| enterpriseType | string | 企业类型，字典 `biz_enterprise_type`（ENTERPRISE/INDIVIDUAL_BUSINESS） |
+| creditCode | string | 统一社会信用代码 |
+| taxpayerType | string | 纳税人类型，字典 `biz_taxpayer_type`（GENERAL_TAXPAYER/SMALL_TAXPAYER） |
+| bizAgentId | string | 工单经办人ID |
+| invoiceAgentId | string | 开票经办人ID |
+| taxAgentId | string | 报税经办人ID |
+| legalRepresentative | string | 法定代表人 |
+| legalPhone | string | 法人电话 |
+| financialOfficer | string | 财务负责人 |
+| financialOfficerPhone | string | 财务负责人电话 |
+| registeredAddress | string | 注册地址 |
+| businessAddress | string | 经营地址 |
+| businessScope | string | 经营范围 |
+| openingDate | date | 开业日期（yyyy-MM-dd） |
+| registeredCapital | string | 注册资本 |
+| employeeCount | int | 从业人数 |
+| taxpayerStatus | string | 纳税人状态 |
+| taxAuthority | string | 主管税务机关 |
+| enterprisePhone | string | 企业联系电话 |
+| enterpriseEmail | string | 企业邮箱 |
+| invoiceHandlerUserId | string | 开票经办人用户 ID（关联系统用户） |
+| bizHandlerUserId | string | 工商经办人用户 ID（关联系统用户） |
+| invoiceFetchStartTime | datetime | 发票抓取历史开始时间，格式 `yyyy-MM-dd HH:mm:ss` |
+| invoiceFetchEndTime | datetime | 发票抓取历史结束时间，格式 `yyyy-MM-dd HH:mm:ss` |
+
+### 13.3 典型对接流程（推荐）
+
+第三方系统创建工单的推荐流程：
+
+```
+1. 调用 /findOrCreate 查找或创建客户 → 获得 customerId
+2. 调用 /bizorder/openapi/workOrder/add 创建工单（传入 customerId）
+   → 服务端自动加载客户绑定的经办人
+3. 平台经办人在后台确认工单 → 分发 RPA 办理
+```
+
+---
+
+### 13.4 findOrCreate — 查找或创建客户（核心接口）
+
+**请求**
+
+```http
+POST /jeecg-boot/bizorder/openapi/customer/findOrCreate
+X-Open-Token: <your-token>
+Content-Type: application/json
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| enterpriseName | string | **是** | 企业名称 |
+| creditCode | string | 否 | 统一社会信用代码（18 位） |
+
+**查找逻辑**：
+1. 若传了 `creditCode`，优先按信用代码精确匹配
+2. 若未匹配，再按 `enterpriseName` 精确匹配
+3. 均未命中则自动创建新客户（`enterpriseType` 默认 `ENTERPRISE`）
+
+**请求示例**：
+
+```json
+{
+  "enterpriseName": "上海星辰贸易有限公司",
+  "creditCode": "91310000MA002B002X"
+}
+```
+
+**响应** — 返回完整 `BizCustomerInfo` 对象（已有客户直接返回，新建客户创建后返回）：
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "",
+  "result": {
+    "id": "2050000000000009001",
+    "enterpriseName": "上海星辰贸易有限公司",
+    "creditCode": "91310000MA002B002X",
+    "enterpriseType": "ENTERPRISE",
+    "taxpayerType": null,
+    "bizAgentId": null,
+    "invoiceAgentId": null,
+    "taxAgentId": null,
+    "legalRepresentative": null,
+    "legalPhone": null,
+    "financialOfficer": null,
+    "financialOfficerPhone": null,
+    "registeredAddress": null,
+    "businessAddress": null,
+    "businessScope": null,
+    "openingDate": null,
+    "registeredCapital": null,
+    "employeeCount": null,
+    "taxpayerStatus": null,
+    "taxAuthority": null,
+    "enterprisePhone": null,
+    "enterpriseEmail": null,
+    "invoiceHandlerUserId": null,
+    "bizHandlerUserId": null,
+    "invoiceFetchStartTime": null,
+    "invoiceFetchEndTime": null,
+    "createTime": "2026-06-25 15:30:00",
+    "updateTime": "2026-06-25 15:30:00"
+  }
+}
+```
+
+拿到 `result.id` 后即可作为 `customerId` 传入工单新增接口。
+
+---
+
+### 13.5 edit — 按 ID 更新客户信息
+
+**请求**
+
+```http
+PUT /jeecg-boot/bizorder/openapi/customer/edit
+X-Open-Token: <your-token>
+Content-Type: application/json
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | string | **是** | 客户主键 ID |
+| enterpriseName | string | 否 | 企业名称 |
+| creditCode | string | 否 | 统一社会信用代码 |
+| taxpayerType | string | 否 | 纳税人类型，`GENERAL_TAXPAYER` / `SMALL_TAXPAYER` |
+| ... | — | 否 | 其他字段见 13.2 节字段表，按需传入即可 |
+
+**请求示例**（只更新需要变更的字段）：
+
+```json
+{
+  "id": "2050000000000009001",
+  "legalRepresentative": "张三",
+  "legalPhone": "13800138000",
+  "taxpayerType": "GENERAL_TAXPAYER",
+  "taxAuthority": "上海市浦东新区税务局"
+}
+```
+
+**响应**：
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "编辑成功",
+  "result": "编辑成功"
+}
+```
+
+> **注意**：`/save` 接口也支持更新（按 `creditCode` 匹配后更新），适用于按信用代码 upsert 的场景。`/edit` 按 ID 更新，适用于已知客户 ID 的场景。两者功能互补。
+
+---
+
+## 14. 发票记录 OpenAPI
+
+**Base URL**: `{host}/jeecg-boot/bizorder/openapi/invoice`
+
+### 14.1 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/list?pageNo=&pageSize=&invoiceNo=&sellerName=&buyerName=` | 分页列表 |
+| GET | `/queryById?id=` | 查单条（含明细行） |
+| GET | `/getByCustomerCreditCode?creditCode=` | 按客户信用代码查历史开票 |
+| GET | `/getByCustomerId?customerId=` | 按客户ID查历史开票 |
+
+### 14.2 发票信息字段（BizInvoiceInfo）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | string | 主键 |
+| invoiceNo | string | 发票编号 |
+| invoiceType | string | 发票种类（ELECTRONIC=数电发票） |
+| invoiceStatus | string | 发票状态（正常/已红冲-全额） |
+| buyerName | string | 购买方名称 |
+| buyerTaxNo | string | 购买方税号 |
+| sellerName | string | 销售方名称 |
+| sellerTaxNo | string | 销售方税号 |
+| totalAmount | decimal | 金额合计 |
+| totalTax | decimal | 税额合计 |
+| totalPriceTax | decimal | 价税合计 |
+| invoiceDate | date | 开票日期 |
+| drawer | string | 开票人 |
+
+### 14.3 发票明细字段（BizInvoiceDetail）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| invoiceId | string | 关联发票ID |
+| itemName | string | 项目名称 |
+| spec | string | 规格型号 |
+| unit | string | 单位 |
+| quantity | decimal | 数量 |
+| unitPrice | decimal | 单价 |
+| amount | decimal | 金额 |
+| taxRate | string | 税率 |
+| taxAmount | decimal | 税额 |
+
+---
+
+## 15. 经营范围 OpenAPI
+
+**Base URL**: `{host}/jeecg-boot/bizorder/openapi/businessScope`
+
+### 15.1 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/search?keyword=&limit=20` | 模糊搜索（匹配规范表述/描述/国标名/编码） |
+| GET | `/page?keyword=&pageNo=&pageSize=` | 分页查询 |
+| GET | `/getByCode?code=` | 按经营范围编码精确查 |
+
+### 15.2 返回字段（BizBusinessScope）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| scopeCode | string | 经营范围编码 |
+| standardItem | string | 规范表述名称 |
+| description | string | 描述说明 |
+| gbName | string | 国标名称 |
+| gbObjList | string | 国标分类路径（JSON数组） |
+| permitType | int | 许可类型 0一般/1前置许可/2后置许可 |
+| specialTips | string | 特别提示 |
+| negativeListRule | string | 负面清单规则 |
