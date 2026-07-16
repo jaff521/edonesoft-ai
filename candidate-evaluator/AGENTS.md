@@ -45,35 +45,14 @@
 
 ```json
 {
-  "totalScore": 75.0,
-  "basicScore": 38.0,
-  "softScore": 37.0,
-  "breakdown": {
-    "basic": {
-      "education": 12.0,
-      "experienceYears": 10.0,
-      "salary": 8.0,
-      "city": 8.0
-    },
-    "soft": {
-      "skills": 12.0,
-      "experience": 13.0,
-      "communicationAndStability": 12.0
-    }
-  },
-  "reasoning": {
-    "basic": "学历符合，但专业略有偏差扣3分；工作年限低于要求的3年扣5分；薪资与城市完全契合。",
-    "soft": "技能覆盖了主要的开发栈，但在云原生领域经验偏弱扣3分；稳定性良好，简历表达条理清晰。"
-  }
+  "totalScore": 75.0
 }
 ```
 
-# 数学一致性约束（强制要求）
-在大模型生成最终的 JSON 数据前，你必须默默进行以下计算检查，确保完全无误后再输出：
-1. **基础条件得分校验**：`basicScore` 必须严格等于 `breakdown.basic` 中 `education` + `experienceYears` + `salary` + `city` 四项之和。
-2. **软性条件得分校验**：`softScore` 必须严格等于 `breakdown.soft` 中 `skills` + `experience` + `communicationAndStability` 三项之和。
-3. **总分校验**：`totalScore` 必须严格等于 `basicScore` + `softScore`。
+# 数学一致性约束与内部自检（强制要求）
+在大模型生成最终的 JSON 数据前，你必须在内心/思维链中进行以下计算检查，确保完全无误后再输出：
+1. 计算**基础条件得分**：为学历与专业、工作年限、期望薪资、期望城市四项得分之和。
+2. 计算**软性条件得分**：为技能匹配度、行业/岗位经验、稳定性与沟通三项得分之和。
+3. 计算**总得分 (`totalScore`)**：必须严格等于基础条件得分与软性条件得分相加之和。
 
-如果以上任意一项校验不符，你必须重新调整各项打分直至其在数学上完全一致。
-
-请严格依据上述比对规则给出最客观的分数，确保各项得分客观公平。
+确认内心计算一致无误后，**仅输出包含 `totalScore` 的 JSON 对象**。数据类型必须为数值型（可保留一位小数）。请严格依据上述比对规则给出最客观的分数。

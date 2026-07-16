@@ -116,36 +116,24 @@ def run_simulation():
                 result = json.loads(json_str)
                 print("JSON 解析成功！开始校验分数逻辑：")
                 
-                total = result.get("totalScore", 0)
-                basic = result.get("basicScore", 0)
-                soft = result.get("softScore", 0)
-                
-                breakdown = result.get("breakdown", {})
-                basic_breakdown = breakdown.get("basic", {})
-                soft_breakdown = breakdown.get("soft", {})
-                
-                basic_sum = sum(basic_breakdown.values())
-                soft_sum = sum(soft_breakdown.values())
-                
-                print(f"- 声明的基础条件得分: {basic}, 细项加和: {basic_sum}")
-                print(f"- 声明的软性条件得分: {soft}, 细项加和: {soft_sum}")
-                print(f"- 声明的总得分: {total}, 两大类得分相加: {basic + soft}")
+                total = result.get("totalScore", None)
+                print(f"- 输出的总得分: {total}")
                 
                 is_valid = True
-                if abs(basic - basic_sum) > 0.01:
-                    print("❌ 警告：基础条件细项之和与 basicScore 不等！")
+                if total is None:
+                    print("❌ 错误：输出结果中未包含 totalScore 字段！")
                     is_valid = False
-                if abs(soft - soft_sum) > 0.01:
-                    print("❌ 警告：软性条件细项之和与 softScore 不等！")
+                elif not isinstance(total, (int, float)):
+                    print(f"❌ 错误：totalScore 字段不是数值类型！实际类型为: {type(total)}")
                     is_valid = False
-                if abs(total - (basic + soft)) > 0.01:
-                    print("❌ 警告：basicScore 与 softScore 之和与 totalScore 不等！")
+                elif total < 0 or total > 100:
+                    print(f"❌ 错误：totalScore 数值超出合理区间 [0, 100]！实际数值: {total}")
                     is_valid = False
                 
                 if is_valid:
-                    print("✅ 校验通过：所有分数及细项数学计算一致！")
+                    print("✅ 校验通过：输出的 JSON 符合单一 totalScore 的精简格式规范！")
                 else:
-                    print("❌ 校验失败：分数逻辑有数学偏差。")
+                    print("❌ 校验失败。")
                     
             except Exception as ex:
                 print(f"❌ JSON 解析失败: {ex}")
