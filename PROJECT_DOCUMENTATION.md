@@ -319,6 +319,25 @@ if 超时:
 
 ---
 
+### 4.6 candidate-evaluator — 岗位匹配度评估专家
+
+**目录**：`skills/candidate-evaluator/`
+- **配置文件**：
+  - [AGENTS.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/candidate-evaluator/AGENTS.md) — 角色定位、打分权重指标、以及标准的 JSON 输出规范。
+  - [SOUL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/candidate-evaluator/SOUL.md) — 冷静、客观、严谨评估人设。
+- **仿真测试脚本**：
+  - [test_evaluator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/candidate-evaluator/test_evaluator.py) — 用于在本地脱离 OpenClaw 整体平台时对模型打分性能与数学一致性校验的仿真测试。
+
+**职责**：负责接收岗位信息与候选人开放简历，比对两者匹配度并给出打分及原因说明。
+
+**打分规则（总分 100 分）**：
+- **基础条件（50 分）**：学历与专业匹配（15 分）、工作年限（15 分）、期望薪资（10 分）、期望城市（10 分）。
+- **软性条件（50 分）**：技能匹配度（15 分）、行业/岗位经验（15 分）、稳定性与沟通能力（20 分，其中稳定性和沟通各占 10 分）。
+
+**输出约束**：必须且仅输出一个合法的 JSON 代码块，并在生成前严格执行数学一致性校验：基础得分 breakdown 各项之和等于 `basicScore`，软性得分 breakdown 各项之和等于 `softScore`，且 `basicScore` 与 `softScore` 之和等于 `totalScore`。
+
+---
+
 ## 5. 工单状态机
 
 ```
@@ -522,4 +541,9 @@ skills/
     ├── SKILL.md                      # 招聘助手 Skill 定义
     └── scripts/
         └── recruitment_callback.py   # 招聘助手回调接口脚本
+│
+└── candidate-evaluator/
+    ├── AGENTS.md                     # 评估专家核心规则 Prompt
+    ├── SOUL.md                       # 评估专家评估心智 Prompt
+    └── test_evaluator.py             # 仿真测试脚本
 ```
