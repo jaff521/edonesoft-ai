@@ -336,6 +336,21 @@ if 超时:
 
 **输出约束**：必须且仅输出一个合法的 JSON 代码块，并在生成前严格执行数学一致性校验：基础得分 breakdown 各项之和等于 `basicScore`，软性得分 breakdown 各项之和等于 `softScore`，且 `basicScore` 与 `softScore` 之和等于 `totalScore`。
 
+### 4.7 resume-analyzer — 简历解析与综合评分专家
+
+**目录**：`skills/resume-analyzer/`
+- **配置文件**：
+  - [AGENTS.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/AGENTS.md) — 角色定位、三维度打分细则（基础、软性、附加）、标签评级规则与标准的 JSON 输出契约。
+  - [SOUL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/SOUL.md) — 客观评估与逻辑自检，保障数值和状态的解耦一致。
+- **仿真测试脚本**：
+  - [test_analyzer.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/test_analyzer.py) — 仿真测试脚本，提供三套对比用例（高匹配、硬性缺失低分、无意向）的自动化接口测试与数学校验。
+
+**职责**：解析岗位信息、简历与聊天记录，客观计算各项得分并输出精准与语义关键词匹配、亮点、改进、建议及匹配评级。
+
+**打分与评级规则**：
+- **得分构成**：基础条件得分（最高 50 分） + 软性条件得分（最高 50 分） + 聊天问题附加得分（每个5分，最高 20 分），总分 `total_score = min(100, 基础 + 软性 + 附加)`。
+- **标签判定（`grade`）**：支持 `"无意向"`、`"不匹配"`（硬性条件不满足且总分<60分，或总分直接低于60分）、`"需跟进"`、`"合格"`、`"良好"`、`"优秀"` 等六类判定。且标签状态与得分打分解耦，即使无意向也应给出客观评估分值。
+
 ---
 
 ## 5. 工单状态机
@@ -546,4 +561,9 @@ skills/
     ├── AGENTS.md                     # 评估专家核心规则 Prompt
     ├── SOUL.md                       # 评估专家评估心智 Prompt
     └── test_evaluator.py             # 仿真测试脚本
+│
+└── resume-analyzer/
+    ├── AGENTS.md                     # 综合评分专家规则 Prompt
+    ├── SOUL.md                       # 综合评分客观与自检 Prompt
+    └── test_analyzer.py              # 仿真测试脚本
 ```
