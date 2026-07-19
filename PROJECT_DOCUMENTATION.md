@@ -308,7 +308,16 @@ if 超时:
 **文件**：[recruitment-assistant/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/recruitment-assistant/SKILL.md)  
 **脚本**：[recruitment_callback.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/recruitment-assistant/scripts/recruitment_callback.py)
 
-**职责**：负责在一对一私聊中进行拟人化招聘对话，并在合适时间向求职者索要简历、打分评估，最后协商面试时间并进行面试预约回调。
+**职责**：负责在一对一私聊中进行模版风格驱动的招聘对话。支持 JSON 格式结构化输入与输出，可通过“预设初筛问题”（含硬性与加分项）在对话中逐步引导候选人，对匹配的候选人触发简历采集与面试邀约回调。
+
+**交互机制**：
+- **输入参数**：包含岗位信息、候选人简历、聊天风格模板、预设初筛问题（硬性条件 + 加分项列表）、历史聊天记录、以及 `是否协商面试时间` 开关。
+- **输出参数**：每次回复必须且仅返回标准 JSON `{ content, messageType, label, bonusPoints, totalBonusPoints }`。
+- **流程控制**：
+  - 硬性不符标记为 `"不匹配"` 并婉拒。
+  - 候选人拒绝意向标记为 `"无意向"` 并收尾。
+  - 正常简历采集完且不约面试则标记为 `"需跟进"`。
+  - 加分项命中单轮 `bonusPoints` 加 5 分，`totalBonusPoints` 进行累加。
 
 **依赖环境变量**：
 
@@ -316,6 +325,7 @@ if 超时:
 |------|------|------|
 | `RECRUITMENT_API_URL` | ❌ | 招聘接口回调地址 |
 | `RECRUITMENT_API_TOKEN` | ❌ | 接口 Authorization Bearer Token 凭证 |
+
 
 ---
 
