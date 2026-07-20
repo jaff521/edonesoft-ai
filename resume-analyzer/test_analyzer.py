@@ -107,12 +107,12 @@ HR：“你好，看了你的简历，觉得你和我们的销售经理岗位很
 """
 
     cases = [
-        ("高匹配度测试用例", test_case_1, "优秀"),
+        ("高匹配度测试用例", test_case_1, "需跟进"),
         ("低匹配与硬性缺失测试用例", test_case_2, "不匹配"),
         ("无意向测试用例", test_case_3, "无意向")
     ]
 
-    for title, case, expected_grade in cases:
+    for title, case, expected_tag in cases:
         print("\n" + "="*60)
         print(f"开始模拟测试：{title}")
         print("="*60)
@@ -150,7 +150,7 @@ HR：“你好，看了你的简历，觉得你和我们的销售经理岗位很
                 print("✅ JSON 解析成功！开始校验分数逻辑与标签：")
                 
                 total = result.get("scoring_rule", {}).get("total_score", 0)
-                grade = result.get("scoring_rule", {}).get("grade", "")
+                tags = result.get("scoring_rule", {}).get("tags", [])
                 
                 basic_score = result.get("basic_conditions", {}).get("actual_score", 0)
                 basic_items = result.get("basic_conditions", {}).get("items", [])
@@ -164,7 +164,7 @@ HR：“你好，看了你的简历，觉得你和我们的销售经理岗位很
                 add_items = result.get("additional_conditions", {}).get("items", [])
                 add_sum = sum([item.get("score", 0) for item in add_items])
                 
-                print(f"- 匹配等级(grade): {grade} (预期: {expected_grade})")
+                print(f"- 匹配标签(tags): {tags} (预期: {expected_tag})")
                 print(f"- 声明的基础得分: {basic_score}, items之和: {basic_sum}")
                 print(f"- 声明的软性得分: {soft_score}, items之和: {soft_sum}")
                 print(f"- 声明的附加得分: {add_score}, items之和: {add_sum}")
@@ -183,17 +183,9 @@ HR：“你好，看了你的简历，觉得你和我们的销售经理岗位很
                 if abs(total - min(100.0, basic_score + soft_score + add_score)) > 0.01:
                     print("❌ 错误：total_score 与三部分累加上限值不匹配！")
                     is_valid = False
-                if grade != expected_grade:
-                    # 如果预期是"不匹配"，实际可以是"不匹配"；如果是"优秀"，实际也可以是"优秀"等
-                    if expected_grade == "不匹配" and grade != "不匹配":
-                        print(f"❌ 错误：预期匹配评级为 '不匹配'，实际输出为 '{grade}'！")
-                        is_valid = False
-                    elif expected_grade == "无意向" and grade != "无意向":
-                        print(f"❌ 错误：预期匹配评级为 '无意向'，实际输出为 '{grade}'！")
-                        is_valid = False
-                    elif expected_grade == "优秀" and grade not in ["优秀", "良好"]:
-                        print(f"❌ 错误：预期匹配评级为优秀，实际输出为 '{grade}'！")
-                        is_valid = False
+                if not isinstance(tags, list) or expected_tag not in tags:
+                    print(f"❌ 错误：预期标签 '{expected_tag}' 未包含在 tags {tags} 中！")
+                    is_valid = False
 
                 # 检查 highlights, improvements, suggestions 长度
                 h_len = len(result.get("highlights", []))

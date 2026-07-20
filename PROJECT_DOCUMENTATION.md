@@ -350,16 +350,16 @@ if 超时:
 
 **目录**：`skills/resume-analyzer/`
 - **配置文件**：
-  - [AGENTS.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/AGENTS.md) — 角色定位、三维度打分细则（基础、软性、附加）、标签评级规则与标准的 JSON 输出契约。
+  - [AGENTS.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/AGENTS.md) — 角色定位、三维度打分细则（基础、软性、附加）、标签判定规则与标准的 JSON 输出契约。
   - [SOUL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/SOUL.md) — 客观评估与逻辑自检，保障数值和状态的解耦一致。
 - **仿真测试脚本**：
   - [test_analyzer.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/resume-analyzer/test_analyzer.py) — 仿真测试脚本，提供三套对比用例（高匹配、硬性缺失低分、无意向）的自动化接口测试与数学校验。
 
-**职责**：解析岗位信息、简历与聊天记录，客观计算各项得分并输出精准与语义关键词匹配、亮点、改进、建议及匹配评级。
+**职责**：解析岗位信息、简历与聊天记录，客观计算各项得分并输出精准与语义关键词匹配、亮点、改进、建议及匹配标签。
 
-**打分与评级规则**：
+**打分与标签规则**：
 - **得分构成**：基础条件得分（最高 50 分） + 软性条件得分（最高 50 分） + 聊天问题附加得分（每个5分，最高 20 分），总分 `total_score = min(100, 基础 + 软性 + 附加)`。
-- **标签判定（`grade`）**：支持 `"无意向"`、`"不匹配"`（硬性条件不满足且总分<60分，或总分直接低于60分）、`"需跟进"`、`"合格"`、`"良好"`、`"优秀"` 等六类判定。且标签状态与得分打分解耦，即使无意向也应给出客观评估分值。
+- **标签判定（`tags`）**：输出为字符串数组，只能包含 `"无意向"`、`"不匹配"`（硬性条件不满足，或总分低于60分）、`"需跟进"`（除无意向和不匹配之外的所有匹配候选人）三种核心标签。且标签状态与得分打分解耦，即使判定为不匹配或无意向，也必须输出真实的客观数学打分值。
 
 ---
 
