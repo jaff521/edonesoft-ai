@@ -2,6 +2,8 @@ import sys
 import json
 import os
 import requests
+import hashlib
+import time
 from typing import Dict, Any, Optional, List
 
 
@@ -83,6 +85,45 @@ def search_tax_category(keyword: str, base_url: str, token: str, limit: int = 5)
         return None
 
 
+def auto_fetch_buyer_credit_code(buyer_name: str) -> Optional[str]:
+    """若购方信用代码缺失，通过企信查接口根据购方企业名称自动查询统一社会信用代码。"""
+    app_id = os.getenv("QYXQK_APP_ID", "")
+    secret = os.getenv("QYXQK_SECRET", "")
+    fuzzy_api = os.getenv("QYXQK_FUZZY_QUERY_API", "https://gateway.qyxqk.com/wdyl/openapi/fuzzy_query/")
+    if not app_id or not secret or not buyer_name:
+        return None
+
+    request_data = {"key": buyer_name}
+    request_body = json.dumps(request_data, ensure_ascii=False)
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+    # 计算签名
+    sorted_keys = sorted(request_data.keys())
+    concat_str = "".join(str(request_data[key]) for key in sorted_keys)
+    sign_string = app_id + timestamp + secret + concat_str
+    sign = hashlib.md5(sign_string.encode("utf-8")).hexdigest()
+
+    headers = {
+        "APPID": app_id,
+        "TIMESTAMP": timestamp,
+        "SIGN": sign,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        resp = requests.post(fuzzy_api, headers=headers, data=request_body, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("code") == 200:
+                data_list = data.get("data", {}).get("data", [])
+                if data_list and isinstance(data_list, list):
+                    info = data_list[0]
+                    return info.get("UNISCID") or info.get("unified_credit_code")
+    except Exception:
+        pass
+    return None
+
+
 # ─── 参数归一化与校验 ────────────────────────────────────────────
 
 def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
@@ -102,7 +143,7 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def normalize_invoice_order(invoice_order: Dict[str, Any]) -> Dict[str, Any]:
-    """归一化发票扩展信息字段。"""
+    """归一化发票扩展信息字段。若购方信用代码缺失但提供企业名称，自动联动企信查填充。"""
     clean = {}
     for key in ["buyerName", "buyerCreditCode", "invoiceType",
                  "invoiceCategory", "invoiceRemark"]:
@@ -116,6 +157,12 @@ def normalize_invoice_order(invoice_order: Dict[str, Any]) -> Dict[str, Any]:
     clean["invoiceCategory"] = normalize_enum(
         clean.get("invoiceCategory"), INVOICE_CATEGORY_ALIASES, ""
     )
+
+    # 自动查询购方信用代码（当未提供 buyerCreditCode 但提供了公司名称时）
+    if not clean.get("buyerCreditCode") and clean.get("buyerName"):
+        auto_code = auto_fetch_buyer_credit_code(clean["buyerName"])
+        if auto_code:
+            clean["buyerCreditCode"] = auto_code
 
     return clean
 
