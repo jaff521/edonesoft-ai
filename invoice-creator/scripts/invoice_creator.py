@@ -2,8 +2,6 @@ import sys
 import json
 import os
 import requests
-import hashlib
-import time
 from typing import Dict, Any, Optional, List
 
 
@@ -91,11 +89,13 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     """归一化工单主表字段。"""
     clean = {}
     for key in ["enterpriseName", "creditCode", "agentId", "isFinalSubmit",
-                 "orderStatus", "wechatMappingKey", "customerId"]:
+                 "orderType", "orderStatus", "wechatMappingKey", "customerId"]:
         value = work_order.get(key)
         if value not in (None, ""):
             clean[key] = value
 
+    # 开票工单固定 orderType = BIZ_INVOICE
+    clean["orderType"] = clean.get("orderType", "BIZ_INVOICE")
     clean["orderStatus"] = normalize_enum(
         clean.get("orderStatus"), ORDER_STATUS_ALIASES, "PREPARING"
     )
@@ -247,9 +247,15 @@ def execute(params: Dict[str, Any]) -> str:
             "message": f"Skill 参数校验失败：{error}"
         }, ensure_ascii=False)
 
+    # 关键点：对齐 JeecgBoot 接口的"多层包裹（套娃）"兼容逻辑
+    # 深度克隆 workOrder 并把子表镜像塞入其内部，实现内外层双向对齐
+    extended_work_order = {**clean_work_order}
+    extended_work_order["invoiceOrder"] = clean_invoice_order
+    extended_work_order["invoiceDetailList"] = clean_detail_list
+
     # 组装发往 JeecgBoot 开放接口的 Payload
     final_payload = {
-        "workOrder": clean_work_order,
+        "workOrder": extended_work_order,
         "invoiceOrder": clean_invoice_order,
         "invoiceDetailList": clean_detail_list,
     }
