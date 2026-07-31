@@ -17,6 +17,7 @@
    - 4.3 [ic-rpa-executor — RPA 自动执行](#43-ic-rpa-executor--rpa-自动执行)
    - 4.4 [oss-uploader — 文件上传](#44-oss-uploader--文件上传)
    - 4.5 [recruitment-assistant — 招聘助手](#45-recruitment-assistant--招聘助手)
+   - 4.6 [invoice-creator — 开票工单创建](#46-invoice-creator--开票工单创建)
 5. [工单状态机](#5-工单状态机)
 6. [环境变量配置](#6-环境变量配置)
 7. [服务依赖关系](#7-服务依赖关系)
@@ -202,6 +203,72 @@ flowchart TD
 | `TICKET_CREATOR_BASE_URL` | ✅ | 工单系统 API Base，如 `http://139.196.78.56:8081/jeecg-boot` |
 | `TICKET_CREATOR_OPEN_TOKEN` | ✅ | 静态鉴权 Token（`X-Open-Token` 请求头） |
 | `TICKET_CREATOR_H5_BASE_URL` | ❌ | H5 确认页 Base（默认回退用 `TICKET_CREATOR_BASE_URL`） |
+
+---
+
+### 4.6 invoice-creator — 开票工单创建
+
+**文件**：[invoice-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/invoice-creator/SKILL.md)  
+**脚本**：[invoice_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/invoice-creator/scripts/invoice_creator.py)  
+**API 参考**：[开票工单对接参考文档.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/temp/开票工单对接参考文档.md)
+
+**职责**：将 LLM 提取的开票信息归一化并提交至工单系统创建开票工单，支持自动搜索税收分类编码。
+
+#### 输入参数结构
+
+```json
+{
+  "sessionKey": "agent:main:dashboard:xxx",
+  "workOrder": {
+    "enterpriseName": "上海星辰贸易有限公司",
+    "creditCode": "91310000MA002B002X"
+  },
+  "invoiceOrder": {
+    "buyerName": "北京某科技有限公司",
+    "buyerCreditCode": "91110108MA01XXXXX",
+    "invoiceType": "BLUE_INVOICE",
+    "invoiceCategory": "SPECIAL_VAT_INVOICE",
+    "invoiceRemark": "项目一期开发费"
+  },
+  "invoiceDetailList": [
+    {
+      "itemName": "软件开发服务",
+      "taxKeyword": "软件开发",
+      "unit": "项",
+      "quantity": 1,
+      "unitPrice": 100000,
+      "taxRate": "6%"
+    }
+  ]
+}
+```
+
+#### 数据归一化处理
+
+| 功能 | 说明 |
+|------|------|
+| 发票类型别名映射 | "蓝字"、"蓝票" → `BLUE_INVOICE`，"红字"、"红冲" → `RED_INVOICE` |
+| 发票类别别名映射 | "专票" → `SPECIAL_VAT_INVOICE`，"普票" → `NORMAL_INVOICE` |
+| 税收编码自动搜索 | 通过 `taxKeyword` 调用 `/taxCategory/search` 接口自动匹配 19 位编码 |
+| sessionKey 注入 | 自动将 `sessionKey` 写入 `wechatMappingKey` 字段 |
+| 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、明细行） |
+
+#### 返回值结构（成功）
+
+```json
+{
+  "success": true,
+  "result": "添加成功！id=2082323735033016330",
+  "ticket_id": "2082323735033016330"
+}
+```
+
+#### 依赖环境变量
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `TICKET_CREATOR_BASE_URL` | ✅ | 复用工单系统 API Base |
+| `RPA_API_KEY` | ✅ | 复用，用于 `X-Open-Token` 鉴权 |
 
 ---
 
@@ -417,9 +484,9 @@ TICKET_CREATOR_BASE_URL=http://139.196.78.56:8081/jeecg-boot
 TICKET_CREATOR_OPEN_TOKEN=...
 TICKET_CREATOR_H5_BASE_URL=http://139.196.78.56:8000   # 可选，默认回退用 BASE_URL
 
-# ────────── RPA 服务 ──────────
+# ────────── RPA 服务 & 开票工单鉴权 ──────────
 RPA_BASE_URL=http://61.169.217.122:8088
-RPA_API_KEY=...
+RPA_API_KEY=...                                         # 同时用于 invoice-creator 的 X-Open-Token 鉴权
 RPA_CALLBACK_URL=                                       # 可选
 
 # ────────── 消息网关（微信群推送） ──────────
@@ -551,6 +618,11 @@ skills/
 │   ├── scripts/
 │   │   └── ticket_creator.py         # 工单创建脚本
 │   └── 工商变更工单API.md             # JeecgBoot 开放接口参考文档 v2.3
+│
+├── invoice-creator/
+│   ├── SKILL.md                      # 开票工单创建 Skill 定义
+│   └── scripts/
+│       └── invoice_creator.py        # 开票工单创建脚本（含税收编码自动搜索）
 │
 ├── ic-rpa-executor/
 │   ├── SKILL.md                      # RPA 执行 Skill 定义

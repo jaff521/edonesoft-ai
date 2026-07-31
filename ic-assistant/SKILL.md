@@ -1,6 +1,6 @@
 ---
 name: ic-assistant
-description: 综合工商变更助手：统一处理企业名称、注册资本、股权、经营范围、经营期限、经营地址、法定代表人变更，以及高级管理人员备案、登记联络员备案、章程备案、监事备案。
+description: 综合工商变更助手：统一处理企业名称、注册资本、股权、经营范围、经营期限、经营地址、法定代表人变更，以及高级管理人员备案、登记联络员备案、章程备案、监事备案、发票开票。
 user-invocable: true
 metadata: {
   "openclaw": {
@@ -24,6 +24,7 @@ metadata: {
 10. 章程备案时间 (BYLAW_ARTICLE)
 11. 监事备案 (SUPERVISOR)
 12. 减资变更 (REDUCTION/CAPITAL) — 注册资本减少的专用简化流程
+13. 发票开票 (INVOICE) — 创建开票工单（蓝字/红字、专票/普票）
 
 你不负责解释法规流程，只需按步骤索要并校验数据与材料，最终归档并提交工单。
 
@@ -73,6 +74,7 @@ metadata: {
   10. 章程备案时间
   11. 监事备案
   12. 减资变更
+  13. 发票开票
 
 ### Step 2: 加载具体业务规则 (关键步骤)
 根据客户选择的变更事项，**必须先使用系统能力读取**对应的业务参考文档，再向客户进行索要：
@@ -88,6 +90,7 @@ metadata: {
 - 若包含**章程备案时间**：读取 `{baseDir}/references/BYLAW_ARTICLE.md`
 - 若包含**监事备案**：读取 `{baseDir}/references/SUPERVISOR.md`
 - 若包含**减资变更**：读取 `{baseDir}/references/REDUCTION.md`
+- 若包含**发票开票**：无需读取参考文档，直接进入开票材料收集流程（见 Step 3-B）
 
 > [!IMPORTANT]
 > 严格遵循参考文档中定义的“办理逻辑”进行引导、计算和校验。
@@ -133,6 +136,71 @@ python3 {baseDir}/scripts/validate_document.py business_license "{图片路径�
 - OCR 验证通过后，将图片（远程 URL 或本地路径）传入 `oss-uploader` Skill 上传至 OSS。
 - 获取返回的 OSS 永久访问地址，回填到对应的字段（如 `idCardFrontUrl`、`certFrontUrl` 等）。
 
+#### 3-B. 发票开票材料收集流程（独立流程）
+
+当客户选择了「发票开票」事项时，进入此独立收集流程（不需要读取 references 文档）：
+
+**① 确认销方企业信息**
+- 复用 Step 1 中已查询的企业名称和信用代码作为销方信息
+- 向客户确认是否正确
+
+**② 收集购方信息**
+逐步询问以下信息：
+- **购买方名称**（必填）：对方公司全称
+- **购买方统一社会信用代码**（可选）：开专票时通常需要
+- **发票类型**（必填）：蓝字发票（正常开票）还是红字发票（冲红）
+- **发票类别**（必填）：增值税专用发票（专票）还是普通发票（普票）
+- **开票备注**（可选）：如项目名称、合同编号等
+
+**③ 收集开票明细行**
+逐行收集，每行包含：
+- **项目名称**（必填）：如"软件开发服务"、"技术咨询费"等
+- **规格型号**（可选）
+- **单位**（可选）：如"项"、"次"、"套"等
+- **数量**（必填）
+- **单价**（必填）：单位为元
+- **税率**（必填）：如 6%、13% 等
+
+询问客户是否还有更多明细行，直到客户确认收集完毕。
+
+**④ 汇总确认**
+将所有收集到的开票信息汇总展示给客户确认，格式示例：
+> 开票信息汇总：
+> 销方：上海星辰贸易有限公司
+> 购方：北京某科技有限公司
+> 类型：蓝字增值税专用发票
+> 明细：
+>   1. 软件开发服务 × 1项 × 100000元，税率6%
+>   2. 技术咨询服务 × 2次 × 5000元，税率6%
+> 请确认是否正确。
+
+**⑤ 调用 invoice-creator 创建工单**
+客户确认后，组装 JSON 并调用 `invoice-creator` Skill：
+```yaml
+Skill: invoice-creator
+  参数:
+    sessionKey: "{sessionKey}"
+    workOrder:
+      enterpriseName: "{销方企业全名}"
+      creditCode: "{销方统一社会信用代码}"
+    invoiceOrder:
+      buyerName: "{购买方名称}"
+      buyerCreditCode: "{购买方信用代码}"
+      invoiceType: "{BLUE_INVOICE 或 RED_INVOICE}"
+      invoiceCategory: "{SPECIAL_VAT_INVOICE 或 NORMAL_INVOICE}"
+      invoiceRemark: "{开票备注}"
+    invoiceDetailList:
+      - itemName: "{项目名称}"
+        taxKeyword: "{项目名称关键词，用于自动匹配税收编码}"
+        unit: "{单位}"
+        quantity: {数量}
+        unitPrice: {单价}
+        taxRate: "{税率}"
+```
+
+> [!NOTE]
+> 每个明细行的 `taxKeyword` 字段用于自动搜索匹配税收分类编码（19位），脚本会调用 `/taxCategory/search` 接口自动填充 `goodsServiceTaxCode`。如果客户已经明确提供了编码，可直接传入 `goodsServiceTaxCode` 字段。
+
 ### Step 4: 汇总确认
 在收集齐所有选中事项的全部必填材料后，向客户进行最终的信息汇总与展示：
 > 请确认以下变更信息是否正确：
@@ -143,7 +211,11 @@ python3 {baseDir}/scripts/validate_document.py business_license "{图片路径�
 客户确认后：
 1. 组装符合各参考文档《字段结构规范》的 JSON（任务资料）。
 2. 调用 `session_status` 提取当前 `Session` 值作为 `sessionKey`。
-3. 调用 `ticket-creator` Skill 创建工单。
+3. **工商变更事项**：调用 `ticket-creator` Skill 创建工商变更工单。
+4. **发票开票事项**：调用 `invoice-creator` Skill 创建开票工单（详见 Step 3-B ⑤）。
+
+> [!NOTE]
+> 如果客户同时选择了工商变更事项和发票开票，需要分别调用两个不同的 Skill 创建两个独立的工单。
 
 **数据字典动态映射指南**：
 在构造工单请求时，`workOrder` 里的以下参数不能硬编码，须根据实际情况动态判定映射：
