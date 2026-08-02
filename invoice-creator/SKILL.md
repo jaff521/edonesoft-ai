@@ -35,7 +35,7 @@ metadata: {
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
 * **字典值优先**：优先传接口字典值，如 `invoiceType=BLUE_INVOICE`、`invoiceCategory=SPECIAL_VAT_INVOICE`；脚本也支持中文自动归一化
 * **税收编码自动搜索**：若明细行中未提供 `goodsServiceTaxCode`（19位编码），可传入 `taxKeyword` 字段，脚本会自动调用 `/taxCategory/search` 接口匹配最佳编码
-* **购方信用代码反查确认**：若购方为公司，可在对话交互中调用 `unified_query.py` 查得其 18 位信用代码，**但必须向客户展示并请客户确认无误后**，方可填入 `buyerCreditCode` 传入提交
+* **购方信用代码自动反查（企业必填）**：当购方名称包含"公司"、"有限"、"集团"等企业关键词时，**必须**在对话交互中调用 `unified_query.py` 自动查询其 18 位信用代码，**向客户展示并请客户确认无误后**，填入 `buyerCreditCode` 提交（严禁跳过查询、严禁未经确认直接提交）
 * **默认值**：未提供时默认 `orderType=BIZ_INVOICE`、`matterType=CHANGE`、`orderStatus=PREPARING`
 
 ---
