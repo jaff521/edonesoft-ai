@@ -15,8 +15,8 @@ metadata: {
 
 ## 配置要求
 - 必填环境变量：
-  - `TICKET_CREATOR_BASE_URL`（复用工商变更的后端地址）
-  - `RPA_API_KEY`（复用，用于 `X-Open-Token` 鉴权）
+  - `TICKET_CREATOR_BASE_URL`（后端服务地址）
+  - `TICKET_CREATOR_OPEN_TOKEN`（`X-Open-Token` 鉴权令牌，未配置时回退读取 `RPA_API_KEY`）
 
 ## 调用指南
 
@@ -36,7 +36,7 @@ metadata: {
 * **字典值优先**：优先传接口字典值，如 `invoiceType=BLUE_INVOICE`、`invoiceCategory=SPECIAL_VAT_INVOICE`；脚本也支持中文自动归一化
 * **税收编码自动搜索**：若明细行中未提供 `goodsServiceTaxCode`（19位编码），可传入 `taxKeyword` 字段，脚本会自动调用 `/taxCategory/search` 接口匹配最佳编码
 * **购方信用代码反查确认**：若购方为公司，可在对话交互中调用 `unified_query.py` 查得其 18 位信用代码，**但必须向客户展示并请客户确认无误后**，方可填入 `buyerCreditCode` 传入提交
-* **默认值**：未提供时默认 `orderType=BIZ_INVOICE`、`orderStatus=PREPARING`
+* **默认值**：未提供时默认 `orderType=BIZ_INVOICE`、`matterType=CHANGE`、`orderStatus=PREPARING`
 
 ---
 

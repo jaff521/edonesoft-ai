@@ -89,13 +89,14 @@ def normalize_work_order(work_order: Dict[str, Any]) -> Dict[str, Any]:
     """归一化工单主表字段。"""
     clean = {}
     for key in ["enterpriseName", "creditCode", "agentId", "isFinalSubmit",
-                 "orderType", "orderStatus", "wechatMappingKey", "customerId"]:
+                 "orderType", "matterType", "orderStatus", "wechatMappingKey", "customerId"]:
         value = work_order.get(key)
         if value not in (None, ""):
             clean[key] = value
 
-    # 开票工单固定 orderType = BIZ_INVOICE
+    # 开票工单固定 orderType = BIZ_INVOICE, matterType = CHANGE
     clean["orderType"] = clean.get("orderType", "BIZ_INVOICE")
+    clean["matterType"] = clean.get("matterType", "CHANGE")
     clean["orderStatus"] = normalize_enum(
         clean.get("orderStatus"), ORDER_STATUS_ALIASES, "PREPARING"
     )
@@ -201,12 +202,12 @@ def execute(params: Dict[str, Any]) -> str:
     :param params: 大模型根据 markdown 规范提取出来的结构化 JSON 字典
     """
     base_url = os.getenv("TICKET_CREATOR_BASE_URL", "")
-    api_token = os.getenv("RPA_API_KEY", "")
+    api_token = os.getenv("TICKET_CREATOR_OPEN_TOKEN") or os.getenv("RPA_API_KEY", "")
 
     if not base_url or not api_token:
         return json.dumps({
             "success": False,
-            "message": "未配置 TICKET_CREATOR_BASE_URL 或 RPA_API_KEY 环境变量"
+            "message": "未配置 TICKET_CREATOR_BASE_URL 或 TICKET_CREATOR_OPEN_TOKEN / RPA_API_KEY 环境变量"
         }, ensure_ascii=False)
 
     # 提取根块
