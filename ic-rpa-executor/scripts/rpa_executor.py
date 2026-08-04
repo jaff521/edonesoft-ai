@@ -369,4 +369,6 @@ def main():
         print(json.dumps({"success": True, "message": "RPA任务启动成功，但工单状态流转失败。"}, ensure_ascii=False))
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     main()

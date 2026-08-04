@@ -30,7 +30,7 @@ def calculate_sign(app_id, timestamp, secret, payload_dict):
 def query_company(company_name):
     """模糊查询企业基本信息"""
     request_data = {"key": company_name}
-    request_body = json.dumps(request_data, ensure_ascii=False)
+    request_body = json.dumps(request_data, ensure_ascii=False).encode('utf-8')
     timestamp = generate_timestamp()
     sign = calculate_sign(APP_ID, timestamp, SECRET, request_data)
 
@@ -53,7 +53,7 @@ def query_shareholders(unified_credit_code):
         "page_index": 1,
         "page_size": 20
     }
-    request_body = json.dumps(request_data, ensure_ascii=False)
+    request_body = json.dumps(request_data, ensure_ascii=False).encode('utf-8')
     timestamp = generate_timestamp()
     sign = calculate_sign(APP_ID, timestamp, SECRET, request_data)
 
@@ -204,4 +204,6 @@ def main():
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     main()

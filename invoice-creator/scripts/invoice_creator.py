@@ -316,6 +316,8 @@ def execute(params: Dict[str, Any]) -> str:
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     if len(sys.argv) > 1:
         try:
             input_params = json.loads(sys.argv[1])
@@ -324,4 +326,4 @@ if __name__ == "__main__":
             print(json.dumps({
                 "success": False,
                 "message": f"CLI 传参解析失败: {str(err)}"
-            }))
+            }, ensure_ascii=False))
