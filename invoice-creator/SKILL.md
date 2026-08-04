@@ -36,6 +36,7 @@ metadata: {
 * **字典值优先**：优先传接口字典值，如 `invoiceType=BLUE_INVOICE`、`invoiceCategory=SPECIAL_VAT_INVOICE`；脚本也支持中文自动归一化
 * **税收编码自动搜索**：若明细行中未提供 `goodsServiceTaxCode`（19位编码），可传入 `taxKeyword` 字段，脚本会自动调用 `/taxCategory/search` 接口匹配最佳编码
 * **购方信用代码处理规则**：① 客户已提供则直接使用；② 客户未提供且购方为企业（名称含"公司"、"有限"、"集团"），**必须**调用 `unified_query.py` 自动查询，查到后**向客户展示确认无误后**填入 `buyerCreditCode`；③ 查询不到则留空提交，不阻断流程
+* **明细行单位（unit）精准提取**：当客户表述中包含了数量和单位（如"1项"、"2次"、"5台"、"10套"），**必须**准确提取出单位字符填入 `unit` 字段并提交到工单；若未提取到单位，则 `unit` 留空即可，无需强行填充
 * **默认值**：未提供时默认 `orderType=BIZ_INVOICE`、`matterType=CHANGE`、`orderStatus=PREPARING`
 
 ---
@@ -114,7 +115,7 @@ metadata: {
 | goodsServiceTaxCode | ❌ | 商品和服务税收分类编码（19位）。若未提供，可传 `taxKeyword` 自动搜索 |
 | taxKeyword | ❌ | 用于自动搜索税收分类编码的关键词。仅当 `goodsServiceTaxCode` 未提供时生效 |
 | spec | ❌ | 规格型号 |
-| unit | ❌ | 单位（如"项"、"次"、"套"等） |
+| unit | ❌ | 单位（如"项"、"次"、"套"、"个"、"台"等）。当客户提及数量和单位时须准确提取填入并提交；未提取到则留空即可 |
 | quantity | ✅ | 数量 |
 | unitPrice | ✅ | 单价（元） |
 | amount | ❌ | 金额（可不传，服务端自动 = 数量×单价） |
