@@ -34,7 +34,7 @@ metadata: {
 * **格式对齐**：输出 `workOrder`、`invoiceOrder`、`invoiceDetailList` 三个根节点
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
 * **字典值优先**：优先传接口字典值，如 `invoiceType=BLUE_INVOICE`、`invoiceCategory=SPECIAL_VAT_INVOICE`；脚本也支持中文自动归一化
-* **税收编码交互确认（goodsServiceTaxCode 必填）**：`goodsServiceTaxCode`（19位纯数字）为**必填项**。前置助手**必须**先调用 `tax_query.py` 检索候选列表，向用户展示并由用户确认选择标准 `itemName` 与 `goodsServiceTaxCode` 后方可填入。无该字段将导致校验失败
+* **税收编码交互确认（goodsServiceTaxCode 必填）**：`goodsServiceTaxCode`（19位纯数字）为**必填项**。前置助手**必须**先调用 `tax_query.py` 检索候选列表，按 `*short_name*name` 格式呈现给用户选择确认（例如 `*生产生活服务*软件维护服务` 或 `*软件*系统软件产品`），用户确认锁定后填入 `itemName` 与 `goodsServiceTaxCode`。无该字段将导致校验失败
 * **购方信用代码处理规则**：① 客户已提供则直接使用；② 客户未提供且购方为企业（名称含"公司"、"有限"、"集团"），**必须**调用 `unified_query.py` 自动查询，查到后**向客户展示确认无误后**填入 `buyerCreditCode`；③ 查询不到则留空提交，不阻断流程
 * **单价含税确认（unitPrice）**：提交工单的单价必须为 **含税单价（元）**。前置助手需确认客户提供的单价是否含税；若为不含税价，须按 `不含税单价 × (1 + 税率)` 换算为含税单价并经客户确认后填入
 * **明细行单位（unit）精准提取**：当客户表述中包含了数量和单位（如"1项"、"2次"、"5台"、"10套"），**必须**准确提取出单位字符填入 `unit` 字段并提交到工单；若未提取到单位，则 `unit` 留空即可，无需强行填充

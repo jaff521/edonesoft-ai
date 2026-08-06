@@ -54,14 +54,17 @@ def search_tax_categories(keyword: str, limit: int = 10):
         for item in records:
             code = item.get("code")
             name = item.get("name")
-            short_name = item.get("shortName") or ""
+            short_name = str(item.get("shortName") or item.get("short_name") or "").strip()
             is_leaf = item.get("isLeaf")
 
             if code and name:
+                name_str = str(name)
+                formatted_name = f"*{short_name}*{name_str}" if short_name else name_str
                 candidates.append({
                     "code": str(code),
-                    "name": str(name),
-                    "shortName": str(short_name),
+                    "name": name_str,
+                    "shortName": short_name,
+                    "formattedName": formatted_name,
                     "isLeaf": is_leaf in (1, True)
                 })
 
