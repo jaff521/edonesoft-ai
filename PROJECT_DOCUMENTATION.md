@@ -235,8 +235,9 @@ flowchart TD
       "itemName": "系统软件产品",
       "goodsServiceTaxCode": "1060301010100000000",
       "unit": "项",
-      "quantity": 1,
-      "unitPrice": 100000,
+      "quantity": 3,
+      "amount": 10000,
+      "unitPrice": 3333.3333333333333,
       "taxRate": "6%"
     }
   ]
@@ -251,8 +252,9 @@ flowchart TD
 | 发票类别别名映射 | "专票" → `SPECIAL_VAT_INVOICE`，"普票" → `NORMAL_INVOICE` |
 | 税收编码强校验 | `goodsServiceTaxCode` 为必填项，严格校验 19 位纯数字格式 |
 | 交互式税码选择 | 前置对话中使用 `tax_query.py` 检索 `/taxCategory/search` 并由客户确认选择 |
+| 含税金额与单价 | `amount`（含税金额，保留最多4位小数）为必填；`unitPrice` 根据 `amount ÷ quantity` 自动计算（除不尽保留 13 位小数） |
 | sessionKey 注入 | 自动将 `sessionKey` 写入 `wechatMappingKey` 字段 |
-| 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、19位税码、明细行） |
+| 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、19位税码、含税金额、明细行） |
 
 #### 返回值结构（成功）
 

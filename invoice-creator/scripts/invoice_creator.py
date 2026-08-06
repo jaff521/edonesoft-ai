@@ -129,7 +129,7 @@ def normalize_detail_list(
     base_url: str,
     token: str,
 ) -> List[Dict[str, Any]]:
-    """归一化开票明细行。"""
+    """归一化开票明细行。自动格式化 amount（保留最多4位小数）并根据 amount ÷ quantity 自动计算 unitPrice（除不尽保留13位小数）。"""
     clean_list = []
     for item in detail_list:
         if not isinstance(item, dict):
@@ -144,6 +144,39 @@ def normalize_detail_list(
 
         # 移除已废弃的临时字段
         clean_item.pop("taxKeyword", None)
+
+        # 格式化 amount (含税总金额，保留最多4位小数)
+        if "amount" in clean_item:
+            try:
+                amt_val = float(clean_item["amount"])
+                clean_item["amount"] = round(amt_val, 4)
+            except (ValueError, TypeError):
+                pass
+
+        # 自动根据 amount ÷ quantity 计算含税单价 unitPrice (若未直接提供)
+        if ("unitPrice" not in clean_item or clean_item["unitPrice"] in (None, "")) and "quantity" in clean_item and "amount" in clean_item:
+            try:
+                qty = float(clean_item["quantity"])
+                amt = float(clean_item["amount"])
+                if qty > 0:
+                    calc_unit_price = amt / qty
+                    if calc_unit_price.is_integer():
+                        clean_item["unitPrice"] = int(calc_unit_price)
+                    else:
+                        clean_item["unitPrice"] = round(calc_unit_price, 13)
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
+
+        # 归一化 unitPrice (保留最多13位小数)
+        if "unitPrice" in clean_item:
+            try:
+                up_val = float(clean_item["unitPrice"])
+                if up_val.is_integer():
+                    clean_item["unitPrice"] = int(up_val)
+                else:
+                    clean_item["unitPrice"] = round(up_val, 13)
+            except (ValueError, TypeError):
+                pass
 
         if clean_item:
             clean_list.append(clean_item)
@@ -186,8 +219,25 @@ def validate_params(
 
         if item.get("quantity") in (None, ""):
             return f"第 {i} 行明细缺少 quantity（数量）"
+        try:
+            qty = float(item.get("quantity"))
+            if qty <= 0:
+                return f"第 {i} 行明细 quantity（数量）必须大于 0"
+        except (ValueError, TypeError):
+            return f"第 {i} 行明细 quantity（数量）数值格式不正确"
+
+        if item.get("amount") in (None, ""):
+            return f"第 {i} 行明细缺少 amount（含税金额）"
+        try:
+            amt = float(item.get("amount"))
+            if amt <= 0:
+                return f"第 {i} 行明细 amount（含税金额）必须大于 0"
+        except (ValueError, TypeError):
+            return f"第 {i} 行明细 amount（含税金额）数值格式不正确"
+
         if item.get("unitPrice") in (None, ""):
-            return f"第 {i} 行明细缺少 unitPrice（单价）"
+            return f"第 {i} 行明细缺少 unitPrice（无法根据 amount ÷ quantity 计算含税单价）"
+
         if not item.get("taxRate"):
             return f"第 {i} 行明细缺少 taxRate（税率）"
 
