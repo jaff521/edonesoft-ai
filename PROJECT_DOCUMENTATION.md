@@ -209,10 +209,10 @@ flowchart TD
 ### 4.6 invoice-creator — 开票工单创建
 
 **文件**：[invoice-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/invoice-creator/SKILL.md)  
-**脚本**：[invoice_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/invoice-creator/scripts/invoice_creator.py)  
+**脚本**：[invoice_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/invoice-creator/scripts/invoice_creator.py)、[tax_query.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/ic-assistant/scripts/tax_query.py)  
 **API 参考**：[开票工单对接参考文档.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/temp/开票工单对接参考文档.md)
 
-**职责**：将 LLM 提取的开票信息归一化并提交至工单系统创建开票工单，支持自动搜索税收分类编码。
+**职责**：将 LLM 提取并经客户确认的开票信息归一化并提交至工单系统创建开票工单。
 
 #### 输入参数结构
 
@@ -232,8 +232,8 @@ flowchart TD
   },
   "invoiceDetailList": [
     {
-      "itemName": "软件开发服务",
-      "taxKeyword": "软件开发",
+      "itemName": "系统软件产品",
+      "goodsServiceTaxCode": "1060301010100000000",
       "unit": "项",
       "quantity": 1,
       "unitPrice": 100000,
@@ -243,15 +243,16 @@ flowchart TD
 }
 ```
 
-#### 数据归一化处理
+#### 数据归一化与校验处理
 
 | 功能 | 说明 |
 |------|------|
 | 发票类型别名映射 | "蓝字"、"蓝票" → `BLUE_INVOICE`，"红字"、"红冲" → `RED_INVOICE` |
 | 发票类别别名映射 | "专票" → `SPECIAL_VAT_INVOICE`，"普票" → `NORMAL_INVOICE` |
-| 税收编码自动搜索 | 通过 `taxKeyword` 调用 `/taxCategory/search` 接口自动匹配 19 位编码 |
+| 税收编码强校验 | `goodsServiceTaxCode` 为必填项，严格校验 19 位纯数字格式 |
+| 交互式税码选择 | 前置对话中使用 `tax_query.py` 检索 `/taxCategory/search` 并由客户确认选择 |
 | sessionKey 注入 | 自动将 `sessionKey` 写入 `wechatMappingKey` 字段 |
-| 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、明细行） |
+| 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、19位税码、明细行） |
 
 #### 返回值结构（成功）
 

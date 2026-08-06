@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import re
 import requests
 from typing import Dict, Any, Optional, List
 
@@ -128,7 +129,7 @@ def normalize_detail_list(
     base_url: str,
     token: str,
 ) -> List[Dict[str, Any]]:
-    """归一化开票明细行，含税收编码自动搜索。"""
+    """归一化开票明细行。"""
     clean_list = []
     for item in detail_list:
         if not isinstance(item, dict):
@@ -141,15 +142,7 @@ def normalize_detail_list(
             if value not in (None, ""):
                 clean_item[key] = value
 
-        # 税收编码自动搜索：如果没有 goodsServiceTaxCode 但有 taxKeyword
-        if not clean_item.get("goodsServiceTaxCode"):
-            tax_keyword = item.get("taxKeyword") or item.get("itemName")
-            if tax_keyword and base_url and token:
-                match = search_tax_category(tax_keyword, base_url, token)
-                if match and match.get("code"):
-                    clean_item["goodsServiceTaxCode"] = match["code"]
-
-        # 移除临时字段
+        # 移除已废弃的临时字段
         clean_item.pop("taxKeyword", None)
 
         if clean_item:
@@ -184,6 +177,13 @@ def validate_params(
     for i, item in enumerate(detail_list, 1):
         if not item.get("itemName"):
             return f"第 {i} 行明细缺少 itemName（项目名称）"
+        
+        tax_code = str(item.get("goodsServiceTaxCode") or "").strip()
+        if not tax_code:
+            return f"第 {i} 行明细缺少 goodsServiceTaxCode（19位商品和服务税收分类编码）"
+        if not re.match(r"^\d{19}$", tax_code):
+            return f"第 {i} 行明细 goodsServiceTaxCode（{tax_code}）格式不符合 19 位纯数字编码要求"
+
         if item.get("quantity") in (None, ""):
             return f"第 {i} 行明细缺少 quantity（数量）"
         if item.get("unitPrice") in (None, ""):
