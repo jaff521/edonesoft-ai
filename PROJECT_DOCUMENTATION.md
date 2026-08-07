@@ -248,11 +248,11 @@ flowchart TD
 
 | 功能 | 说明 |
 |------|------|
-| 发票类型别名映射 | "蓝字"、"蓝票" → `BLUE_INVOICE`，"红字"、"红冲" → `RED_INVOICE` |
-| 发票类别别名映射 | "专票" → `SPECIAL_VAT_INVOICE`，"普票" → `NORMAL_INVOICE` |
-| 税收编码强校验 | `goodsServiceTaxCode` 为必填项，严格校验 19 位纯数字格式 |
-| 交互式税码选择 | 前置对话中使用 `tax_query.py` 检索 `/taxCategory/search` 并由客户确认选择 |
-| 含税金额与单价 | `amount`（含税金额，保留最多4位小数）为必填；`unitPrice` 根据 `amount ÷ quantity` 自动计算（除不尽保留 13 位小数） |
+| 发票类型默认处理 | 默认固定为 `BLUE_INVOICE`（蓝字发票），免去提示词交互询问 |
+| 企业纳税人资质自动匹配 | 结合 `unified_query.py` 判断：小规模纳税人默认普票 (`NORMAL_INVOICE`) 与 1% 税率；一般纳税人默认专票 (`SPECIAL_VAT_INVOICE`) |
+| 税收编码强校验与简称展示 | `goodsServiceTaxCode` 为必填项（19位纯数字）；`tax_query.py` 候选列表优先仅显示简称 `shortName` 供选择 |
+| 含税金额与单价自动计算 | `amount`（含税金额，保留最多4位小数）为必填；`unitPrice` 根据 `amount ÷ quantity` 自动计算（除不尽保留 13 位小数） |
+| 二次确认防随意建单 | 收集完后打出完整汇总信息，必须在客户显式回复“确认”后方可运行 `invoice-creator` 建单 |
 | sessionKey 注入 | 自动将 `sessionKey` 写入 `wechatMappingKey` 字段 |
 | 参数校验 | 必填字段检查（销方名称、购方名称、发票类型、发票类别、19位税码、含税金额、明细行） |
 

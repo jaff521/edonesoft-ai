@@ -34,10 +34,12 @@ metadata: {
 * **格式对齐**：输出 `workOrder`、`invoiceOrder`、`invoiceDetailList` 三个根节点
 * **自动忽略审计字段**：不生成 `id`、`createBy`、`createTime`、`updateBy`、`updateTime`、`sysOrgCode`、`tenantId`、`delFlag`、`orderNo`、`orderId` 等后端填充字段
 * **字典值优先**：优先传接口字典值，如 `invoiceType=BLUE_INVOICE`、`invoiceCategory=SPECIAL_VAT_INVOICE`；脚本也支持中文自动归一化
-* **税收编码交互确认（goodsServiceTaxCode 必填）**：`goodsServiceTaxCode`（19位纯数字）为**必填项**。前置助手**必须**先调用 `tax_query.py` 检索候选列表，按 `*short_name*name` 格式呈现给用户选择确认（例如 `*生产生活服务*软件维护服务` 或 `*软件*系统软件产品`），用户确认锁定后填入 `itemName` 与 `goodsServiceTaxCode`。无该字段将导致校验失败
+* **默认蓝字与类别自动匹配**：默认固定 `invoiceType=BLUE_INVOICE`（蓝字发票）免去询问；发票类别结合销方企业纳税人身份自动匹配（小规模纳税人默认 `NORMAL_INVOICE` 普票、默认税率 `1%`；一般纳税人默认 `SPECIAL_VAT_INVOICE` 专票）
+* **税收编码交互确认（仅展示简称）**：`goodsServiceTaxCode`（19位纯数字）为**必填项**。前置助手**必须**先调用 `tax_query.py` 检索候选列表，按简称 `shortName` 呈献给用户选择确认（例如 `计算机配套产品`），用户确认锁定后填入 `itemName` 与 `goodsServiceTaxCode`
 * **购方信用代码处理规则**：① 客户已提供则直接使用；② 客户未提供且购方为企业（名称含"公司"、"有限"、"集团"），**必须**调用 `unified_query.py` 自动查询，查到后**向客户展示确认无误后**填入 `buyerCreditCode`；③ 查询不到则留空提交，不阻断流程
 * **金额（amount 必填）与单价（unitPrice）计算**：`amount`（含税总金额，元）为**必填项**，保留最多 4 位小数。前置助手不再询问单价，而是询问含税总金额。若客户提供的是不含税金额，须按 `含税金额 = 不含税金额 × (1 + 税率)` 换算并经客户确认。单价 `unitPrice` 由 `amount ÷ quantity` 自动计算，除不尽时保留 13 位小数
 * **明细行单位（unit）精准提取**：当客户表述中包含了数量和单位（如"1项"、"2次"、"5台"、"10套"），**必须**准确提取出单位字符填入 `unit` 字段并提交到工单；若未提取到单位，则 `unit` 留空即可，无需强行填充
+* **二次确认方可建单**：助手整理出完整开票汇总后，**必须获得客户明确回复“确认”后**方可调用脚本创建工单，严禁随意建单
 * **默认值**：未提供时默认 `orderType=BIZ_INVOICE`、`matterType=CHANGE`、`orderStatus=PREPARING`
 
 ---

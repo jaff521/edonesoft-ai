@@ -140,6 +140,21 @@ def main():
     registration_status = company_info.get("ENTSTATUS", "正常")
     established_date = company_info.get("ESDATE", "")
 
+    taxpayer_type = "UNKNOWN"
+    info_str = json.dumps(company_info, ensure_ascii=False)
+    if "小规模" in info_str:
+        taxpayer_type = "SMALL_SCALE"
+    elif "一般纳税人" in info_str:
+        taxpayer_type = "GENERAL"
+    else:
+        try:
+            if raw_registered_capital and float(raw_registered_capital) < 500:
+                taxpayer_type = "SMALL_SCALE"
+            elif raw_registered_capital and float(raw_registered_capital) >= 500:
+                taxpayer_type = "GENERAL"
+        except Exception:
+            taxpayer_type = "UNKNOWN"
+
     result["company_name"] = official_company_name
     result["companyName"] = official_company_name
     result["unified_credit_code"] = unified_credit_code
@@ -153,6 +168,9 @@ def main():
     result["registrationStatus"] = registration_status
     result["established_date"] = established_date
     result["establishedDate"] = established_date
+    result["taxpayer_type"] = taxpayer_type
+    result["taxpayerType"] = taxpayer_type
+    result["taxpayerTypeCn"] = "小规模纳税人" if taxpayer_type == "SMALL_SCALE" else ("一般纳税人" if taxpayer_type == "GENERAL" else "需人工确认")
 
     # Step 2: 查询股东信息
     shareholder_data = query_shareholders(unified_credit_code)

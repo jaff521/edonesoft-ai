@@ -59,12 +59,14 @@ def search_tax_categories(keyword: str, limit: int = 10):
 
             if code and name:
                 name_str = str(name)
-                formatted_name = f"*{short_name}*{name_str}" if short_name else name_str
+                # 仅显示简称（若 shortName 存在且非空使用 shortName，否则回退使用全称 name）
+                display_name = short_name if short_name else name_str
                 candidates.append({
                     "code": str(code),
                     "name": name_str,
                     "shortName": short_name,
-                    "formattedName": formatted_name,
+                    "displayName": display_name,
+                    "formattedName": display_name,
                     "isLeaf": is_leaf in (1, True)
                 })
 
