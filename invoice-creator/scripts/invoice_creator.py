@@ -123,13 +123,37 @@ def normalize_invoice_order(invoice_order: Dict[str, Any]) -> Dict[str, Any]:
 
     return clean
 
+def _parse_tax_rate(raw_rate) -> float:
+    """将税率转换为小数形式。支持 '6%' -> 0.06, '0.06' -> 0.06, 6 -> 0.06 等。"""
+    if raw_rate is None or raw_rate == "":
+        return 0.0
+    s = str(raw_rate).strip()
+    if s.endswith("%"):
+        return float(s[:-1]) / 100.0
+    val = float(s)
+    # 如果传入的是 6、13 这种整数百分比值，自动转为小数
+    if val >= 1:
+        return val / 100.0
+    return val
+
 
 def normalize_detail_list(
     detail_list: List[Dict[str, Any]],
     base_url: str,
     token: str,
 ) -> List[Dict[str, Any]]:
-    """归一化开票明细行。自动格式化 amount（保留最多4位小数）并根据 amount ÷ quantity 自动计算 unitPrice（除不尽保留13位小数）。"""
+    """归一化开票明细行。
+
+    接口规范（最新）：
+    - unitPrice: 不含税单价
+    - amount: 不含税金额
+    - taxRate: 小数形式（如 0.06）
+    - taxAmount: 税额（必填）
+    - taxInclusiveAmount: 含税金额（可选，不传时服务端自动计算）
+
+    客户默认提供的是含税金额（taxInclusiveAmount），脚本自动换算为不含税金额、
+    不含税单价、税额。数量未提供时默认为 1。
+    """
     clean_list = []
     for item in detail_list:
         if not isinstance(item, dict):
@@ -137,7 +161,8 @@ def normalize_detail_list(
 
         clean_item: Dict[str, Any] = {}
         for key in ["itemName", "goodsServiceTaxCode", "spec", "unit",
-                     "quantity", "unitPrice", "amount", "taxRate"]:
+                     "quantity", "unitPrice", "amount", "taxRate",
+                     "taxAmount", "taxInclusiveAmount"]:
             value = item.get(key)
             if value not in (None, ""):
                 clean_item[key] = value
@@ -145,36 +170,70 @@ def normalize_detail_list(
         # 移除已废弃的临时字段
         clean_item.pop("taxKeyword", None)
 
-        # 格式化 amount (含税总金额，保留最多4位小数)
-        if "amount" in clean_item:
+        # 数量默认为 1
+        if "quantity" not in clean_item or clean_item["quantity"] in (None, ""):
+            clean_item["quantity"] = 1
+
+        # 归一化税率为小数形式（如 "6%" -> 0.06）
+        if "taxRate" in clean_item:
             try:
-                amt_val = float(clean_item["amount"])
-                clean_item["amount"] = round(amt_val, 4)
+                clean_item["taxRate"] = _parse_tax_rate(clean_item["taxRate"])
             except (ValueError, TypeError):
                 pass
 
-        # 自动根据 amount ÷ quantity 计算含税单价 unitPrice (若未直接提供)
-        if ("unitPrice" not in clean_item or clean_item["unitPrice"] in (None, "")) and "quantity" in clean_item and "amount" in clean_item:
+        # ─── 含税金额 → 不含税金额/单价/税额 自动换算 ───
+        # 客户提供的金额默认为含税金额（taxInclusiveAmount）
+        # 需要换算为不含税金额(amount)、不含税单价(unitPrice)、税额(taxAmount)
+        tax_rate = float(clean_item.get("taxRate", 0))
+        qty = float(clean_item.get("quantity", 1))
+
+        # 判断客户传入的 amount 是含税还是不含税：
+        # 如果已有 taxInclusiveAmount 则视为已明确区分；
+        # 否则将 amount 视为含税金额（默认含税），移到 taxInclusiveAmount
+        if "taxInclusiveAmount" not in clean_item and "amount" in clean_item:
             try:
-                qty = float(clean_item["quantity"])
-                amt = float(clean_item["amount"])
-                if qty > 0:
-                    calc_unit_price = amt / qty
-                    if calc_unit_price.is_integer():
-                        clean_item["unitPrice"] = int(calc_unit_price)
-                    else:
-                        clean_item["unitPrice"] = round(calc_unit_price, 13)
+                clean_item["taxInclusiveAmount"] = round(float(clean_item["amount"]), 2)
+                del clean_item["amount"]
+            except (ValueError, TypeError):
+                pass
+
+        # 根据 taxInclusiveAmount 计算 amount(不含税金额)、taxAmount(税额)
+        if "taxInclusiveAmount" in clean_item:
+            try:
+                tax_inclusive = float(clean_item["taxInclusiveAmount"])
+                # 不含税金额 = 含税金额 / (1 + 税率)，保留2位小数
+                amount_ex_tax = round(tax_inclusive / (1 + tax_rate), 2) if tax_rate > 0 else round(tax_inclusive, 2)
+                # 税额 = 含税金额 - 不含税金额
+                tax_amount = round(tax_inclusive - amount_ex_tax, 2)
+
+                clean_item["amount"] = amount_ex_tax
+                clean_item["taxAmount"] = tax_amount
+                clean_item["taxInclusiveAmount"] = round(tax_inclusive, 2)
             except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
-        # 归一化 unitPrice (保留最多13位小数)
+        # 自动计算不含税单价 unitPrice = amount(不含税) / quantity
+        if "amount" in clean_item and ("unitPrice" not in clean_item or clean_item["unitPrice"] in (None, "")):
+            try:
+                amt = float(clean_item["amount"])
+                if qty > 0:
+                    calc_up = amt / qty
+                    clean_item["unitPrice"] = round(calc_up, 13) if not calc_up.is_integer() else int(calc_up)
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
+
+        # 归一化 amount 保留2位小数
+        if "amount" in clean_item:
+            try:
+                clean_item["amount"] = round(float(clean_item["amount"]), 2)
+            except (ValueError, TypeError):
+                pass
+
+        # 归一化 unitPrice（除不尽保留13位小数）
         if "unitPrice" in clean_item:
             try:
                 up_val = float(clean_item["unitPrice"])
-                if up_val.is_integer():
-                    clean_item["unitPrice"] = int(up_val)
-                else:
-                    clean_item["unitPrice"] = round(up_val, 13)
+                clean_item["unitPrice"] = round(up_val, 13) if not up_val.is_integer() else int(up_val)
             except (ValueError, TypeError):
                 pass
 
@@ -227,19 +286,22 @@ def validate_params(
             return f"第 {i} 行明细 quantity（数量）数值格式不正确"
 
         if item.get("amount") in (None, ""):
-            return f"第 {i} 行明细缺少 amount（含税金额）"
+            return f"第 {i} 行明细缺少 amount（不含税金额）"
         try:
             amt = float(item.get("amount"))
             if amt <= 0:
-                return f"第 {i} 行明细 amount（含税金额）必须大于 0"
+                return f"第 {i} 行明细 amount（不含税金额）必须大于 0"
         except (ValueError, TypeError):
-            return f"第 {i} 行明细 amount（含税金额）数值格式不正确"
+            return f"第 {i} 行明细 amount（不含税金额）数值格式不正确"
 
         if item.get("unitPrice") in (None, ""):
-            return f"第 {i} 行明细缺少 unitPrice（无法根据 amount ÷ quantity 计算含税单价）"
+            return f"第 {i} 行明细缺少 unitPrice（不含税单价）"
 
-        if not item.get("taxRate"):
+        if item.get("taxRate") in (None, ""):
             return f"第 {i} 行明细缺少 taxRate（税率）"
+
+        if item.get("taxAmount") in (None, ""):
+            return f"第 {i} 行明细缺少 taxAmount（税额）"
 
     return None
 
