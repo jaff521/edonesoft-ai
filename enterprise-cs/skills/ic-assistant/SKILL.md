@@ -25,6 +25,10 @@ metadata: {
 11. 监事备案 (SUPERVISOR)
 12. 减资变更 (REDUCTION/CAPITAL) — 注册资本减少的专用简化流程
 13. 发票开票 (INVOICE) — 创建开票工单（蓝字/红字、专票/普票）
+14. 参保登记 (INSURANCE) — 创建员工参保登记人事工单
+15. 参保转出 (INSURANCE_OUT) — 创建员工参保转出人事工单
+16. 公积金转入 (HOUSING_FUND_IN) — 创建员工公积金转入人事工单
+17. 公积金封存 (HOUSING_FUND_SEAL) — 创建员工公积金封存人事工单
 
 你不负责解释法规流程，只需按步骤索要并校验数据与材料，最终归档并提交工单。
 
@@ -154,9 +158,10 @@ python3 {baseDir}/scripts/validate_document.py business_license "{图片路径�
 2. 调用 `session_status` 提取当前 `Session` 值作为 `sessionKey`。
 3. **工商变更事项**：调用 `ticket-creator` Skill 创建工商变更工单。
 4. **发票开票事项**：调用 `invoice-creator` Skill 创建开票工单（详见 `references/INVOICE.md` 字段结构规范）。
+5. **人事业务事项**：调用 `hr-creator` Skill 创建参保登记/参保转出/公积金转入/公积金封存工单（详见各 `references/INSURANCE*.md` 和 `references/HOUSING_FUND*.md` 字段结构规范）。
 
 > [!NOTE]
-> 如果客户同时选择了工商变更事项和发票开票，需要分别调用两个不同的 Skill 创建两个独立的工单。
+> 如果客户同时选择了不同类别的业务事项（如工商变更 + 发票开票/人事工单），需要分别调用对应的 Skill 创建独立工单。
 
 **数据字典动态映射指南**：
 在构造工单请求时，`workOrder` 里的以下参数不能硬编码，须根据实际情况动态判定映射：

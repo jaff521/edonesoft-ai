@@ -121,6 +121,10 @@ flowchart TD
 - [REDUCTION.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/REDUCTION.md) — 减资变更逻辑
 - [LEGAL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/LEGAL.md) — 法定代表人变更逻辑
 - [INVOICE.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/INVOICE.md) — 发票开具逻辑
+- [INSURANCE.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/INSURANCE.md) — 参保登记逻辑
+- [INSURANCE_OUT.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/INSURANCE_OUT.md) — 参保转出逻辑
+- [HOUSING_FUND_IN.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/HOUSING_FUND_IN.md) — 公积金转入逻辑
+- [HOUSING_FUND_SEAL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/ic-assistant/references/HOUSING_FUND_SEAL.md) — 公积金封存逻辑
 
 #### 4.1.2 ticket-creator — 工单创建
 
@@ -133,7 +137,13 @@ flowchart TD
 **文件**：[invoice-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/invoice-creator/SKILL.md)  
 **脚本**：[invoice_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/invoice-creator/scripts/invoice_creator.py)  
 
-#### 4.1.4 oss-uploader — 文件上传
+#### 4.1.4 hr-creator — 人事业务工单创建
+
+**文件**：[hr-creator/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/hr-creator/SKILL.md)  
+**脚本**：[hr_creator.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/hr-creator/scripts/hr_creator.py)  
+**API 参考**：[人事业务工单对接参考文档.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/temp/人事业务工单对接参考文档.md)
+
+#### 4.1.5 oss-uploader — 文件上传
 
 **文件**：[oss-uploader/SKILL.md](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/oss-uploader/SKILL.md)  
 **脚本**：[upload_tool.py](file:///Users/suf1234/code-spaces/edonesoft/ai-workers/skills/enterprise-cs/skills/oss-uploader/scripts/upload_tool.py)
@@ -289,7 +299,7 @@ skills/
 │   ├── AGENTS.md                     # 角色定位与服务红线 Prompt
 │   ├── SOUL.md                       # 人设 Constraint Prompt
 │   └── skills/                       # 企业客服使用的 Skill 库
-│       ├── ic-assistant/             # 综合工商变更与开票前置助手 Skill
+│       ├── ic-assistant/             # 综合工商变更与开票、人事前置助手 Skill
 │       │   ├── SKILL.md
 │       │   ├── references/
 │       │   └── scripts/
@@ -298,6 +308,9 @@ skills/
 │       │   ├── scripts/
 │       │   └── 工商变更工单API.md
 │       ├── invoice-creator/          # 开票工单创建 Skill
+│       │   ├── SKILL.md
+│       │   └── scripts/
+│       ├── hr-creator/               # 人事业务工单创建 Skill
 │       │   ├── SKILL.md
 │       │   └── scripts/
 │       └── oss-uploader/             # OSS 文件上传 Skill
