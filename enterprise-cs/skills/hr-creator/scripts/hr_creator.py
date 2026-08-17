@@ -29,6 +29,38 @@ ORDER_STATUS_ALIASES = {
     "已办结": "DONE",
 }
 
+CONTRACT_SIGN_TYPE_ALIASES = {
+    "未签": "未签",
+    "未签订": "未签",
+    "未签合同": "未签",
+    "初签": "初签",
+    "首次签订": "初签",
+    "首签": "初签",
+    "纸质合同": "初签",
+    "电子合同": "初签",
+}
+
+CONTRACT_TERM_ALIASES = {
+    "固定期限": "固定期限劳动合同",
+    "固定期限劳动合同": "固定期限劳动合同",
+    "6个月": "固定期限劳动合同",
+    "半年": "固定期限劳动合同",
+    "一年": "固定期限劳动合同",
+    "1年": "固定期限劳动合同",
+    "二年": "固定期限劳动合同",
+    "2年": "固定期限劳动合同",
+    "三年": "固定期限劳动合同",
+    "3年": "固定期限劳动合同",
+    "五年": "固定期限劳动合同",
+    "5年": "固定期限劳动合同",
+    "无固定期限": "无固定期限劳动合同",
+    "无固定期限劳动合同": "无固定期限劳动合同",
+    "长期": "无固定期限劳动合同",
+    "以完成一定工作任务为期限": "以完成一定工作任务为期限",
+    "工作任务": "以完成一定工作任务为期限",
+    "完成一定工作任务": "以完成一定工作任务为期限",
+}
+
 
 def normalize_enum(value: Any, aliases: Dict[str, str], default: str = "") -> str:
     """将中文别名归一化为标准枚举值。"""
@@ -86,6 +118,12 @@ def normalize_insurance_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
     for date_key in ["employmentStartDate", "contractStartDate", "contractEndDate"]:
         if date_key in clean:
             clean[date_key] = normalize_date(clean[date_key])
+
+    if "contractSignType" in clean:
+        clean["contractSignType"] = normalize_enum(clean["contractSignType"], CONTRACT_SIGN_TYPE_ALIASES, clean["contractSignType"])
+
+    if "contractTerm" in clean:
+        clean["contractTerm"] = normalize_enum(clean["contractTerm"], CONTRACT_TERM_ALIASES, clean["contractTerm"])
 
     if "employmentForm" not in clean:
         clean["employmentForm"] = "全日制"
@@ -162,9 +200,9 @@ def validate_params(
         if not insurance_detail.get("employmentStartDate"):
             return "insuranceDetail 缺少 employmentStartDate（就业起始日期）"
         if not insurance_detail.get("contractSignType"):
-            return "insuranceDetail 缺少 contractSignType（合同签订方式：纸质合同/电子合同）"
+            return "insuranceDetail 缺少 contractSignType（合同签订方式：未签/初签）"
         if not insurance_detail.get("contractTerm"):
-            return "insuranceDetail 缺少 contractTerm（合同期限：6个月/一年/三年/五年/长期）"
+            return "insuranceDetail 缺少 contractTerm（合同期限：固定期限劳动合同/无固定期限劳动合同/以完成一定工作任务为期限）"
         if not insurance_detail.get("contractStartDate"):
             return "insuranceDetail 缺少 contractStartDate（合同开始日期）"
         if not insurance_detail.get("contractEndDate"):

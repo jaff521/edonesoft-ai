@@ -57,8 +57,8 @@ metadata: {
     "employeeName": "张三",
     "idCard": "310101199001011234",
     "employmentStartDate": "2026-08-01",
-    "contractSignType": "纸质合同",
-    "contractTerm": "三年",
+    "contractSignType": "初签",
+    "contractTerm": "固定期限劳动合同",
     "contractStartDate": "2026-08-01",
     "contractEndDate": "2029-07-31",
     "employmentForm": "全日制",
@@ -130,8 +130,8 @@ metadata: {
 | `employeeName` | ✅ | string | 员工姓名 |
 | `idCard` | ✅ | string | 身份证号（18位） |
 | `employmentStartDate` | ✅ | string | 就业起始日期（`yyyy-MM-dd`） |
-| `contractSignType` | ✅ | string | 合同签订方式：`纸质合同` / `电子合同` |
-| `contractTerm` | ✅ | string | 合同期限：`6个月` / `一年` / `三年` / `五年` / `长期` |
+| `contractSignType` | ✅ | string | 合同签订方式：`未签` / `初签` |
+| `contractTerm` | ✅ | string | 合同期限：`固定期限劳动合同` / `无固定期限劳动合同` / `以完成一定工作任务为期限` |
 | `contractStartDate` | ✅ | string | 合同开始日期（`yyyy-MM-dd`） |
 | `contractEndDate` | ✅ | string | 合同结束日期（`yyyy-MM-dd`） |
 | `employmentForm` | ❌ | string | 用工形式，默认 `全日制` |
