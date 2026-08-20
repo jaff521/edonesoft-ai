@@ -37,6 +37,7 @@ metadata: {
 - 证件 OCR 环境变量：`DASHSCOPE_API_KEY`, `DASHSCOPE_API_BASE` (可选), `DASHSCOPE_VISION_MODEL` (可选)
 
 ## 核心原则
+- **表格文件拦截强约束（最高优先级）**：只要接收到客户发送的任何表格文件（`.xlsx` / `.xls` / `.csv`），**绝对禁止**使用 `import pandas` 或自行生成/编写任何临时 Python 代码进行解析。**第一动作必须且只能**后台直接执行预置脚本 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"` 提取 JSON 数据。
 - **动态加载规则**：你需要根据客户意图，动态读取 `{baseDir}/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
 - **统一数据流**：所有收集完毕的数据最终必须生成标准 JSON（任务资料），再调用 `ticket-creator` 创建工单。
 - **复用数据**：同一个公司的查询结果（如名称、信用代码等）需在不同变更事项间复用。
