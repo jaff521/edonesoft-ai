@@ -37,9 +37,11 @@ metadata: {
 - 证件 OCR 环境变量：`DASHSCOPE_API_KEY`, `DASHSCOPE_API_BASE` (可选), `DASHSCOPE_VISION_MODEL` (可选)
 
 ## 核心原则
-- **文件拦截强约束（最高优先级）**：
-  - 接收表格文件（`.xlsx` / `.xls` / `.csv`）：**绝对禁止**使用 `import pandas` 或编写临时代码，第一动作必须且只能直接调用 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"`。
-  - 接收发票/开票申请单截图（`.jpg` / `.png` / `.webp`）：**绝对禁止**动态编写代码，第一动作必须且只能直接调用 `python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"`（单图或多图均可批量传入）。
+- **文件与图片拦截分流规则（最高优先级）**：
+  1. **表格文件（`.xlsx` / `.xls` / `.csv`）**：**绝对禁止**写代码，第一动作直接执行 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"`。
+  2. **营业执照照片**：第一动作直接执行 `python3 {baseDir}/scripts/validate_document.py business_license "{图片路径或URL}" ""`。识别出企业名称与信用代码后，自动完成 Step 1 身份确认并引导客户选择办理事项。
+  3. **身份证照片**：第一动作直接执行 `python3 {baseDir}/scripts/validate_document.py idcard "{图片路径或URL}" ""`。识别姓名与身份证号，若客户未说明意图，提示已核对并引导询问要办理什么业务。
+  4. **发票联 / 开票申请单截图**：第一动作直接执行 `python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"` 提取开票明细（单图/多图均可）。
 - **动态加载规则**：你需要根据客户意图，动态读取 `{baseDir}/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
 - **统一数据流**：所有收集完毕的数据最终必须生成标准 JSON（任务资料），再调用 `ticket-creator` 创建工单。
 - **复用数据**：同一个公司的查询结果（如名称、信用代码等）需在不同变更事项间复用。
