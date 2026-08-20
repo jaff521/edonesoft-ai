@@ -31,7 +31,7 @@ def detect_file_encoding(file_path: str) -> str:
     return "utf-8-sig"  # 默认回退
 
 
-def read_csv_file(file_path: str, max_rows: int = 200) -> Dict[str, Any]:
+def read_csv_file(file_path: str, max_rows: int = 10000) -> Dict[str, Any]:
     """读取 CSV 文件并转换为标准结构化 JSON。"""
     encoding = detect_file_encoding(file_path)
 
@@ -85,7 +85,7 @@ def read_csv_file(file_path: str, max_rows: int = 200) -> Dict[str, Any]:
     data_rows = []
     truncated = False
     for row in raw_rows[header_idx + 1:]:
-        if len(data_rows) >= max_rows:
+        if max_rows > 0 and len(data_rows) >= max_rows:
             truncated = True
             break
         row_dict = {}
@@ -114,7 +114,7 @@ def read_csv_file(file_path: str, max_rows: int = 200) -> Dict[str, Any]:
     }
 
 
-def read_excel_file(file_path: str, target_sheet: Optional[str] = None, max_rows: int = 200) -> Dict[str, Any]:
+def read_excel_file(file_path: str, target_sheet: Optional[str] = None, max_rows: int = 10000) -> Dict[str, Any]:
     """使用 openpyxl 读取 .xlsx 文件并转换为标准结构化 JSON。"""
     try:
         import openpyxl
@@ -220,7 +220,7 @@ def read_excel_file(file_path: str, target_sheet: Optional[str] = None, max_rows
 
         data_rows = []
         for r in raw_rows[header_idx + 1:]:
-            if len(data_rows) >= max_rows:
+            if max_rows > 0 and len(data_rows) >= max_rows:
                 break
             row_dict = {}
             for col_i, h_name in enumerate(clean_headers):
@@ -249,7 +249,7 @@ def main():
     parser = argparse.ArgumentParser(description="通用 Excel / CSV 文件读取工具")
     parser.add_argument("file_path", help="要读取的 Excel (.xlsx) 或 CSV (.csv) 文件路径")
     parser.add_argument("--sheet", help="指定要读取的工作表(Sheet)名称", default=None)
-    parser.add_argument("--max-rows", type=int, help="最多读取的行数 (默认 200)", default=200)
+    parser.add_argument("--max-rows", type=int, help="最多读取的行数 (默认 10000，设置 0 表示不限制)", default=10000)
 
     args = parser.parse_args()
 
@@ -276,9 +276,10 @@ def main():
             df = pd.read_excel(file_path, sheet_name=args.sheet or 0)
             headers = [str(c).strip() for c in df.columns]
             rows = df.fillna("").to_dict(orient="records")
-            # 格式化日期/数字
             clean_rows = []
-            for r in rows[:args.max_rows]:
+            for idx, r in enumerate(rows):
+                if args.max_rows > 0 and idx >= args.max_rows:
+                    break
                 clean_r = {str(k).strip(): (int(v) if isinstance(v, float) and v.is_integer() else str(v).strip()) for k, v in r.items()}
                 clean_rows.append(clean_r)
 
