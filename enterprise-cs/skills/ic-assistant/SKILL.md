@@ -146,6 +146,24 @@ python3 {baseDir}/scripts/validate_document.py business_license "{图片路径�
 - OCR 验证通过后，将图片（远程 URL 或本地路径）传入 `oss-uploader` Skill 上传至 OSS。
 - 获取返回的 OSS 永久访问地址，回填到对应的字段（如 `idCardFrontUrl`、`certFrontUrl` 等）。
 
+#### 3.2 Excel / CSV 表格数据读取处理流程（通用）
+当客户在微信群中发送 Excel 文件（`.xlsx`, `.xls`）或 CSV 文件（`.csv`）时，按以下流程处理：
+
+> [!CAUTION]
+> **硬性约束：严禁动态生成或执行 Python 脚本**
+> 收到表格文件时，**绝对禁止**自行编写、生成或执行任何临时 Python 代码来读取文件。必须且只能直接调用预置脚本 `excel_reader.py`。
+
+**① 执行预置读取脚本**
+```bash
+python3 {baseDir}/scripts/excel_reader.py "{表格文件路径或URL}"
+```
+
+**② 字段语义映射**
+根据脚本返回的标准 JSON，将表格中的列名映射到对应的业务字段（例如发票场景下的 `itemName`、`taxInclusiveAmount`、`quantity`、`unit`、`spec`、`taxRate` 等）。
+
+**③ 逐行补充与确认**
+在映射完成后，按对应业务规则（如调用 `tax_query.py` 补充税收分类编码）补全缺少的数据，然后统一进入 Step 4 汇总确认。
+
 ### Step 4: 汇总确认（强约束步骤）
 在收集齐所有选中事项的全部必填材料后，向客户进行最终的信息汇总与展示。**开票明细必须逐字段标注**（项目名称（`*简称*货物名称`格式）、税收分类编码、数量、单位、金额（含税）、税率各自单独一行），严禁使用紧凑一行格式，避免后续组装 JSON 时遗漏字段。
 
