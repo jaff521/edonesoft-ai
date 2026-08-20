@@ -37,7 +37,9 @@ metadata: {
 - 证件 OCR 环境变量：`DASHSCOPE_API_KEY`, `DASHSCOPE_API_BASE` (可选), `DASHSCOPE_VISION_MODEL` (可选)
 
 ## 核心原则
-- **表格文件拦截强约束（最高优先级）**：只要接收到客户发送的任何表格文件（`.xlsx` / `.xls` / `.csv`），**绝对禁止**使用 `import pandas` 或自行生成/编写任何临时 Python 代码进行解析。**第一动作必须且只能**后台直接执行预置脚本 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"` 提取 JSON 数据。
+- **文件拦截强约束（最高优先级）**：
+  - 接收表格文件（`.xlsx` / `.xls` / `.csv`）：**绝对禁止**使用 `import pandas` 或编写临时代码，第一动作必须且只能直接调用 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"`。
+  - 接收发票/开票申请单截图（`.jpg` / `.png` / `.webp`）：**绝对禁止**动态编写代码，第一动作必须且只能直接调用 `python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"`（单图或多图均可批量传入）。
 - **动态加载规则**：你需要根据客户意图，动态读取 `{baseDir}/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
 - **统一数据流**：所有收集完毕的数据最终必须生成标准 JSON（任务资料），再调用 `ticket-creator` 创建工单。
 - **复用数据**：同一个公司的查询结果（如名称、信用代码等）需在不同变更事项间复用。
@@ -164,6 +166,28 @@ python3 {baseDir}/scripts/excel_reader.py "{表格文件路径或URL}"
 
 **③ 逐行补充与确认**
 在映射完成后，按对应业务规则（如调用 `tax_query.py` 补充税收分类编码）补全缺少的数据，然后统一进入 Step 4 汇总确认。
+
+#### 3.3 发票 / 开票申请单截图数据读取处理流程（通用）
+当客户发送发票联、开票申请单、费用明细表等图片（`.jpg`, `.png`, `.webp`）时，按以下流程处理：
+
+> [!CAUTION]
+> **硬性约束：严禁动态生成或执行 Python 代码**
+> 收到开票图片时，**绝对禁止**自行编写任何 Python 代码。必须直接调用预置脚本 `invoice_ocr.py`。
+> 注意：身份证与营业执照仍按 3.1 节调用 `validate_document.py`，互不影响。
+
+**① 执行预置识别脚本**
+```bash
+python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"
+# 若客户发送多张图片，可一次性传入多个路径：
+python3 {baseDir}/scripts/invoice_ocr.py "{图1路径}" "{图2路径}"
+```
+
+**② 字段提取与自动对齐**
+- 提取出的 `buyerName` / `buyerCreditCode` 自动填入购买方信息（自动调用 `unified_query.py` 校验企信）。
+- 提取出的 `detailList` 数组自动映射到开票明细字段（`itemName`、`taxInclusiveAmount`、`quantity`、`unit`、`spec`、`taxRate`）。
+
+**③ 补全与汇总确认**
+对缺少税收分类编码简称的明细，调用 `tax_query.py` 补全，然后统一进入 Step 4 汇总确认。
 
 ### Step 4: 汇总确认（强约束步骤）
 在收集齐所有选中事项的全部必填材料后，向客户进行最终的信息汇总与展示。**开票明细必须逐字段标注**（项目名称（`*简称*货物名称`格式）、税收分类编码、数量、单位、金额（含税）、税率各自单独一行），严禁使用紧凑一行格式，避免后续组装 JSON 时遗漏字段。

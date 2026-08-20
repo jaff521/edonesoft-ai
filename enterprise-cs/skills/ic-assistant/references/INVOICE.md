@@ -93,6 +93,28 @@
 
 ---
 
+### 三-c、发票 / 开票申请单截图批量识别开票明细
+
+当客户发送发票联、开票申请单、费用明细表等图片（`.jpg`, `.png`, `.webp`）而非口述明细时：
+
+> [!CAUTION]
+> **严禁编写临时 Python 脚本**：绝对禁止写代码识别图片，必须直接调用预置脚本 `invoice_ocr.py`。
+> 注意：身份证与营业执照识别依然调用 `validate_document.py`，互不影响。
+
+1. **执行预置识别脚本**：
+   ```bash
+   python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"
+   # 支持批量传入多张截图：
+   python3 {baseDir}/scripts/invoice_ocr.py "{图1路径}" "{图2路径}"
+   ```
+2. **字段提取与自动校验**：
+   - 提取出的 `buyerName` / `buyerCreditCode` 自动填入购买方信息，并自动调用 `unified_query.py` 校验企信补全税号。
+   - 提取出的 `detailList` 自动映射为开票字段：`itemName`、`taxInclusiveAmount`、`quantity`、`unit`、`spec`、`taxRate`。
+3. **逐行补全税收分类编码**：对缺少简称的明细调用 `tax_query.py` 检索编码，向客户展示并确认。
+4. **汇总确认**：所有明细整理完成后，统一进入 Section 四汇总确认流程。
+
+---
+
 ### 四、汇总确认与二次确认建单（强约束步骤）
 
 将所有收集到的开票信息**逐字段**汇总展示给客户，**每个必填字段必须单独标注呈现**。格式示例：
