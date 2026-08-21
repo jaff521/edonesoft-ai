@@ -98,14 +98,13 @@
 当客户发送发票联、开票申请单、费用明细表等图片（`.jpg`, `.png`, `.webp`）而非口述明细时：
 
 > [!CAUTION]
-> **严禁编写临时 Python 脚本**：绝对禁止写代码识别图片，必须直接调用预置脚本 `invoice_ocr.py`。
-> 注意：身份证与营业执照识别依然调用 `validate_document.py`，互不影响。
+> **严禁编写临时 Python 脚本**：绝对禁止写代码识别图片，必须直接调用预置脚本 `image_processor.py`。
 
 1. **执行预置识别脚本**：
    ```bash
-   python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"
-   # 支持批量传入多张截图：
-   python3 {baseDir}/scripts/invoice_ocr.py "{图1路径}" "{图2路径}"
+   python3 {baseDir}/scripts/image_processor.py --type invoice "{图片路径或URL}"
+   # 支持批量传入多张截图（也可不带 --type，脚本会自动检测）：
+   python3 {baseDir}/scripts/image_processor.py "{图1路径}" "{图2路径}"
    ```
 2. **字段提取与自动校验**：
    - 提取出的 `buyerName` / `buyerCreditCode` 自动填入购买方信息，并自动调用 `unified_query.py` 校验企信补全税号。

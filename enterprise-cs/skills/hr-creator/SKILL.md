@@ -29,7 +29,7 @@ metadata: {
 
 ### 2. 前置条件与数据收集
 * **企业信息**：企业名称（`enterpriseName`）、统一社会信用代码（`creditCode`，可选）。
-* **员工身份证信息**：支持从文本获取或通过 `validate_document.py`（DashScope OCR 视觉识别）从客户发送的身份证正反面照片中自动提取姓名和身份证号。
+* **员工身份证信息**：支持从文本获取或通过 `image_processor.py`（DashScope OCR 视觉识别）从客户发送的身份证正反面照片中自动提取姓名和身份证号。
 * **业务扩展明细**：根据具体 `orderType` 收集必填明细字段（见下表）。
 * **会话路由**：如在微信会话中，须先调用 `session_status` 提取 `Session` 字段值作为 `sessionKey`。
 

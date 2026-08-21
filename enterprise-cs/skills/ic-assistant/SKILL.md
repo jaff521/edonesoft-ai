@@ -37,11 +37,9 @@ metadata: {
 - 证件 OCR 环境变量：`DASHSCOPE_API_KEY`, `DASHSCOPE_API_BASE` (可选), `DASHSCOPE_VISION_MODEL` (可选)
 
 ## 核心原则
-- **文件与图片拦截分流规则（最高优先级）**：
+- **文件与图片处理强约束（最高优先级）**：
   1. **表格文件（`.xlsx` / `.xls` / `.csv`）**：**绝对禁止**写代码，第一动作直接执行 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"`。
-  2. **营业执照照片**：第一动作直接执行 `python3 {baseDir}/scripts/validate_document.py business_license "{图片路径或URL}" ""`。识别出企业名称与信用代码后，自动完成 Step 1 身份确认并引导客户选择办理事项。
-  3. **身份证照片**：第一动作直接执行 `python3 {baseDir}/scripts/validate_document.py idcard "{图片路径或URL}" ""`。识别姓名与身份证号，若客户未说明意图，提示已核对并引导询问要办理什么业务。
-  4. **发票联 / 开票申请单截图**：第一动作直接执行 `python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"` 提取开票明细（单图/多图均可）。
+  2. **任何证件 / 发票 / 截图图片**：**绝对禁止**动态写代码，第一动作直接执行 `python3 {baseDir}/scripts/image_processor.py "{图片路径或URL}"`（可自动辨识图片类型）。若对话中已明确类型，也可加上 `--type` 参数（`idcard` / `business_license` / `invoice`）。
 - **动态加载规则**：你需要根据客户意图，动态读取 `{baseDir}/references/` 下的对应业务参考文档，以获取具体的收集和校验规则。
 - **统一数据流**：所有收集完毕的数据最终必须生成标准 JSON（任务资料），再调用 `ticket-creator` 创建工单。
 - **复用数据**：同一个公司的查询结果（如名称、信用代码等）需在不同变更事项间复用。
@@ -122,13 +120,16 @@ metadata: {
 - 也可能是本地文件路径（如通过其他方式提前下载）。
 - 无论是远程 URL 还是本地路径，均可直接作为参数传入脚本，脚本内部会自动处理远程下载。
 
-**② 调用 `validate_document.py` 进行 OCR 识别**
+**② 调用 `image_processor.py` 进行 OCR 识别**
 ```bash
-# 身份证识别（正面/反面均用此命令，脚本自动判断正反面）
-python3 {baseDir}/scripts/validate_document.py idcard "{图片路径或URL}" "{对比姓名}"
+# 身份证识别（自动分辨正反面；已知类型时可带 --type idcard）
+python3 {baseDir}/scripts/image_processor.py --type idcard "{图片路径或URL}" --compare "{对比姓名}"
 
-# 营业执照识别
-python3 {baseDir}/scripts/validate_document.py business_license "{图片路径或URL}" "{对比企业名}"
+# 营业执照识别（已知类型时可带 --type business_license）
+python3 {baseDir}/scripts/image_processor.py --type business_license "{图片路径或URL}" --compare "{对比企业名}"
+
+# 若未指定 --type 参数，通用处理器会自动检测图片类型并完成提取
+python3 {baseDir}/scripts/image_processor.py "{图片路径或URL}"
 ```
 - 脚本支持远程 URL 输入，内部自动下载到临时文件后处理。
 - 返回 JSON 格式结果，包含 `success`、`extracted`（OCR 提取的字段）、`matched`（姓名是否匹配）、`issues`（问题列表）。
@@ -174,14 +175,13 @@ python3 {baseDir}/scripts/excel_reader.py "{表格文件路径或URL}"
 
 > [!CAUTION]
 > **硬性约束：严禁动态生成或执行 Python 代码**
-> 收到开票图片时，**绝对禁止**自行编写任何 Python 代码。必须直接调用预置脚本 `invoice_ocr.py`。
-> 注意：身份证与营业执照仍按 3.1 节调用 `validate_document.py`，互不影响。
+> 收到开票图片或未知图片时，**绝对禁止**自行编写 Python 代码。必须直接调用预置脚本 `image_processor.py`。
 
 **① 执行预置识别脚本**
 ```bash
-python3 {baseDir}/scripts/invoice_ocr.py "{图片路径或URL}"
-# 若客户发送多张图片，可一次性传入多个路径：
-python3 {baseDir}/scripts/invoice_ocr.py "{图1路径}" "{图2路径}"
+python3 {baseDir}/scripts/image_processor.py --type invoice "{图片路径或URL}"
+# 若客户发送多张图片，也可直接传入多个路径（自动辨识或批量识别）：
+python3 {baseDir}/scripts/image_processor.py "{图1路径}" "{图2路径}"
 ```
 
 **② 字段提取与自动对齐**

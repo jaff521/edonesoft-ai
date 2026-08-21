@@ -20,7 +20,7 @@
 
 **自然人股东**：
 1. 请求提供身份证正反面照片和身份证号。
-2. 调用 `validate_document.py`（类型 `idcard`，传入股东姓名作为对比参数）进行 OCR 识别。
+2. 调用 `image_processor.py`（类型 `idcard`，传入股东姓名作为对比参数）进行 OCR 识别。
 3. OCR 成功后，调用 `oss-uploader` 上传正反面图片至 OSS。
 4. 回填字段：
    - `certType` → `"ID_CARD"`
@@ -30,7 +30,7 @@
 
 **企业法人股东**：
 1. 请求提供营业执照照片和统一社会信用代码。
-2. 调用 `validate_document.py`（类型 `business_license`，传入股东企业名作为对比参数）进行 OCR 识别。
+2. 调用 `image_processor.py`（类型 `business_license`，传入股东企业名作为对比参数）进行 OCR 识别。
 3. OCR 成功后，调用 `oss-uploader` 上传执照图片至 OSS。
 4. 回填字段：
    - `certType` → `"BUSINESS_LICENSE"`

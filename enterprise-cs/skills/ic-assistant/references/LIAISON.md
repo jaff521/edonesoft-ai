@@ -15,8 +15,8 @@
 | 身份证反面照片 | ✅ 必填 |
 
 ### 2. 证件核验
-按主控 SKILL.md Step 3.1 的通用流程处理：
-1. 将图片 URL 传入 `validate_document.py`，使用 `idcard` 类型，并传入联络员姓名作为对比参数。
+收到身份证照片后，按主控 SKILL.md Step 3.1 的通用流程处理：
+1. 将图片 URL 传入 `image_processor.py`，使用 `idcard` 类型，并传入联络员姓名作为对比参数。
 2. 校验姓名一致性和证件有效期。
 3. OCR 成功后，调用 `oss-uploader` Skill 上传正反面图片至 OSS。
 4. 回填字段：`idCardFrontUrl`、`idCardBackUrl`。
