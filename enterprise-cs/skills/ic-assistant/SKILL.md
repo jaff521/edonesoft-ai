@@ -39,7 +39,7 @@ metadata: {
 ## 核心原则
 - **文件与图片处理强约束（最高优先级）**：
   1. **表格文件（`.xlsx` / `.xls` / `.csv`）**：**绝对禁止**写代码，第一动作直接执行 `python3 {baseDir}/scripts/excel_reader.py "{文件路径}"`。
-  2. **任何证件 / 发票 / 截图图片**：**绝对禁止**动态写代码，第一动作直接执行 `python3 {baseDir}/scripts/image_processor.py "{图片路径或URL}"`（可自动辨识图片类型）。若对话中已明确类型，也可加上 `--type` 参数（`idcard` / `business_license` / `invoice`）。
+  2. **任何证件 / 发票 / 截图图片**：**绝对禁止使用系统内置的 `image` 工具**！第一动作必须且只能后台直接执行 `python3 {baseDir}/scripts/image_processor.py "{图片路径或URL}"`（自动辨识图片类型）。若对话中已明确类型，也可加上 `--type` 参数（`idcard` / `business_license` / `invoice`）。
 - **脚本命令行调用强约束（最高优先级）**：
   - **严禁擅自添加标志**：在调用系统预置脚本时，**绝对禁止**擅自添加 `--company`、`-c` 或任何非文档规定的参数标志。
   - **严格遵循位置参数**：例如查询企业信息时，**必须且只能**直接传入公司名称字符串作为唯一位置参数：
