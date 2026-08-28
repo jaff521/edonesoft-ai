@@ -6,6 +6,32 @@ import requests
 from typing import Dict, Any, Optional, List
 
 
+# 自动向上搜寻加载 .env 环境变量
+def load_dotenv():
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(6):
+        env_file = os.path.join(cur_dir, ".env")
+        if os.path.exists(env_file):
+            try:
+                with open(env_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            if k.strip() not in os.environ:
+                                os.environ[k.strip()] = v.strip()
+            except Exception:
+                pass
+            break
+        parent = os.path.dirname(cur_dir)
+        if parent == cur_dir:
+            break
+        cur_dir = parent
+
+
+load_dotenv()
+
+
 # ─── 枚举归一化字典 ───────────────────────────────────────────────
 
 INVOICE_TYPE_ALIASES = {
